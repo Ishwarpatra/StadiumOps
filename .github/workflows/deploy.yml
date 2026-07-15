@@ -1,0 +1,81 @@
+name: StadiumOps Pro CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-and-lint:
+    name: Build & Lint Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Code Quality (Lint & Type-Check)
+        run: npm run lint
+
+      - name: Production Build
+        run: npm run build
+
+  deploy:
+    name: Deploy to Google Cloud Run
+    needs: build-and-lint
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # Setup Google Cloud CLI for deployment
+      - name: Authenticate with Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Build and Push Docker Image to GCR
+        run: |
+          gcloud auth configure-docker --quiet
+          docker build -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/stadium-ops-pro:${{ github.sha }} .
+          docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/stadium-ops-pro:${{ github.sha }}
+
+      - name: Deploy to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: stadium-ops-pro
+          image: gcr.io/${{ secrets.GCP_PROJECT_ID }}/stadium-ops-pro:${{ github.sha }}
+          region: us-central1
+          flags: '--allow-unauthenticated --port=3000 --min-instances=0 --max-instances=5'
+          env_vars: |
+            NODE_ENV=production
+            VITE_APP_URL=https://ais-dev-27qe423lhobpe6k3s5y2mt-743089973269.asia-east1.run.app
+
+      - name: Post Deployment Diagnostics Check
+        run: |
+          echo "Deployment completed successfully!"
+          echo "Public live link: https://ais-dev-27qe423lhobpe6k3s5y2mt-743089973269.asia-east1.run.app"

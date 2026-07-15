@@ -88,7 +88,7 @@ STADIUM_ID="stadium_stg_coliseum_99b"
 IOT_HUB_ID="hub_mesh_west_gate_c"
 POS_TERMINAL_ID="pos_alpha_vendor_42"
 CCTV_STREAM_ID="stream_unified_concourse_112"
-APP_URL="https://example-stadium-ops.app"
+APP_URL="https://ais-dev-27qe423lhobpe6k3s5y2mt-743089973269.asia-east1.run.app"
 ```
 
 ### Installation

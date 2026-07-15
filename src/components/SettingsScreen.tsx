@@ -1491,7 +1491,7 @@ export default function SettingsScreen({
                         type="text"
                         value={appUrl}
                         onChange={(e) => setAppUrl(e.target.value)}
-                        placeholder="https://example-stadium-ops.app"
+                        placeholder="https://ais-dev-27qe423lhobpe6k3s5y2mt-743089973269.asia-east1.run.app"
                         className="w-full bg-white dark:bg-slate-800 p-2 rounded border border-slate-200 dark:border-slate-700 font-mono text-xs text-slate-700 dark:text-slate-300 outline-none focus:border-primary"
                       />
                     </div>

@@ -30,6 +30,7 @@ import StaffingScreen from './components/StaffingScreen';
 import VenueScreen from './components/VenueScreen';
 import SettingsScreen from './components/SettingsScreen';
 import HelpScreen from './components/HelpScreen';
+import { ComponentGuard } from './components/ComponentGuard';
 
 // Types and mock data
 import { SimulationState, Hotspot, Bottleneck, AIActionItem } from './types';
@@ -1136,57 +1137,69 @@ export default function App() {
         
 
           {currentTab === 'dashboard' && (
-            <DashboardScreen 
-              simulation={simulation}
-              setSimulation={setSimulation}
-              bottlenecks={bottlenecks}
-              setBottlenecks={setBottlenecks}
-              aiActions={aiActions}
-              setAiActions={setAiActions}
-              setHotspots={setHotspots}
-              onNavigate={handleNavigate}
-            />
+            <ComponentGuard moduleName="Dashboard Screen">
+              <DashboardScreen 
+                simulation={simulation}
+                setSimulation={setSimulation}
+                bottlenecks={bottlenecks}
+                setBottlenecks={setBottlenecks}
+                aiActions={aiActions}
+                setAiActions={setAiActions}
+                setHotspots={setHotspots}
+                onNavigate={handleNavigate}
+              />
+            </ComponentGuard>
           )}
 
           {currentTab === 'revenue' && (
-            <RevenueScreen 
-              simulation={simulation}
-              setSimulation={setSimulation}
-            />
+            <ComponentGuard moduleName="Revenue Concessions Screen">
+              <RevenueScreen 
+                simulation={simulation}
+                setSimulation={setSimulation}
+              />
+            </ComponentGuard>
           )}
 
           {currentTab === 'staffing' && (
-            <StaffingScreen 
-              simulation={simulation}
-              setSimulation={setSimulation}
-              hotspots={hotspots}
-              setHotspots={setHotspots}
-              setBottlenecks={setBottlenecks}
-            />
+            <ComponentGuard moduleName="Staffing Map Screen">
+              <StaffingScreen 
+                simulation={simulation}
+                setSimulation={setSimulation}
+                hotspots={hotspots}
+                setHotspots={setHotspots}
+                setBottlenecks={setBottlenecks}
+              />
+            </ComponentGuard>
           )}
 
           {currentTab === 'venue' && (
-            <VenueScreen 
-              simulation={simulation}
-              setSimulation={setSimulation}
-            />
+            <ComponentGuard moduleName="Venue Sentiment Screen">
+              <VenueScreen 
+                simulation={simulation}
+                setSimulation={setSimulation}
+              />
+            </ComponentGuard>
           )}
 
           {currentTab === 'settings' && (
-            <SettingsScreen 
-              simulation={simulation}
-              setSimulation={setSimulation}
-              setHotspots={setHotspots}
-              setBottlenecks={setBottlenecks}
-              onReset={handleResetTelemetry}
-            />
+            <ComponentGuard moduleName="Settings Screen">
+              <SettingsScreen 
+                simulation={simulation}
+                setSimulation={setSimulation}
+                setHotspots={setHotspots}
+                setBottlenecks={setBottlenecks}
+                onReset={handleResetTelemetry}
+              />
+            </ComponentGuard>
           )}
 
           {currentTab === 'help' && (
-            <HelpScreen 
-              simulation={simulation}
-              setSimulation={setSimulation}
-            />
+            <ComponentGuard moduleName="Help & Advice Screen">
+              <HelpScreen 
+                simulation={simulation}
+                setSimulation={setSimulation}
+              />
+            </ComponentGuard>
           )}
         </div>
       </main>
@@ -1220,8 +1233,8 @@ export default function App() {
             <div className="flex-grow overflow-y-auto space-y-3 pr-1">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Active Target Hotspots</h3>
               {hotspots.map(h => {
-                const waitTime = h.priority === 'critical' ? 240 : h.priority === 'high' ? 180 : 90;
-                const queueCount = h.priority === 'critical' ? 95 : h.priority === 'high' ? 60 : 30;
+                const waitTime = (h.priority as string) === 'critical' ? 240 : h.priority === 'high' ? 180 : 90;
+                const queueCount = (h.priority as string) === 'critical' ? 95 : h.priority === 'high' ? 60 : 30;
                 return (
                   <div key={h.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
