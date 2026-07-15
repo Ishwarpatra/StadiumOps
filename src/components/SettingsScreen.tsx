@@ -80,8 +80,302 @@ export default function SettingsScreen({
 
   const apiKeyValue = apiConfig.stadiumOpsApiKey;
 
+  // Interactive GCP Web Services state
+  const [selectedGcpServiceId, setSelectedGcpServiceId] = useState<string>('gcp_cloud_run');
+  const [isPingingService, setIsPingingService] = useState(false);
+  const [gcpPingConsoleLogs, setGcpPingConsoleLogs] = useState<string[]>([
+    "[SYSTEM INFO] Ready to run live service ping diagnostics.",
+    "Click 'Run Diagnostics Self-Test' to compile active operational telemetry logs."
+  ]);
+
+  const gcpServices = [
+    {
+      id: 'gcp_gke',
+      category: 'Core Infrastructure & Compute',
+      name: 'Google Kubernetes Engine (GKE)',
+      status: 'Orchestrating Pods',
+      badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900',
+      latency: '14ms',
+      throughput: '18,420 req/s',
+      description: 'Hosts high-performance stadium APIs and coordinate microservices. Automatically scales nodes based on game day traffic spikes.',
+      command: 'gcloud container clusters get-credentials stadium-gke-cluster --region=us-central1',
+      defaultLogs: [
+        "Kubernetes Engine scheduler: reconciling replicaSets...",
+        "Scaling: Added 4 new nodes to worker pool 'concourse-stewards-pool'",
+        "All 24 active pods report HEALTHY status (ingress-controller OK)"
+      ]
+    },
+    {
+      id: 'gcp_cloud_run',
+      category: 'Core Infrastructure & Compute',
+      name: 'Google Cloud Run',
+      status: 'Active Auto-scaling',
+      badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900',
+      latency: '22ms',
+      throughput: '5,120 req/s',
+      description: 'Serves lightweight, serverless JSON event routes and endpoints. Automatically scales to zero during off-peak, non-event hours to prevent utility waste.',
+      command: 'gcloud run deploy stadium-ops-api --source=. --region=us-central1',
+      defaultLogs: [
+        "Cloud Run environment variables injected successfully from Secret Manager.",
+        "Listening on port 3000...",
+        "Auto-scaled to 1 active container instance (cold start: 180ms)."
+      ]
+    },
+    {
+      id: 'gcp_cloud_functions',
+      category: 'Core Infrastructure & Compute',
+      name: 'Google Cloud Functions',
+      status: 'Event-driven Triggers',
+      badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900',
+      latency: '45ms',
+      throughput: '850 invocations/min',
+      description: 'Executes highly specialized code routines on-demand, such as compiling mobile food order tallies and firing transactional SMS receipts.',
+      command: 'gcloud functions deploy processOrder --trigger-http --runtime=nodejs20',
+      defaultLogs: [
+        "Cloud Function trigger resolved: 'order_completed_topic'",
+        "Compiled order details & pushed receipt payload to customer mobile.",
+        "Execution completed in 42ms."
+      ]
+    },
+    {
+      id: 'gcp_vertex_ai',
+      category: 'AI, Machine Learning & Computer Vision',
+      name: 'Vertex AI Model Registry',
+      status: 'Predictive Analytics Active',
+      badgeColor: 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900',
+      latency: '110ms',
+      throughput: '125 predictions/s',
+      description: 'Hosts neural network and dynamic forecasting models to anticipate turnstile crowding patterns and recalculate ticket pricing metrics in real-time.',
+      command: 'gcloud ai models list --region=us-central1',
+      defaultLogs: [
+        "Vertex AI model 'crowd_density_predictor_v4' loaded successfully.",
+        "Recalculating crowd bottleneck vector coefficients based on latest gates inflow...",
+        "Prediction output: Gate B queue expected wait time will surpass 180s in 5 mins."
+      ]
+    },
+    {
+      id: 'gcp_cloud_vision',
+      category: 'AI, Machine Learning & Computer Vision',
+      name: 'Cloud Vision API',
+      status: 'CheckoutOCR Online',
+      badgeColor: 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900',
+      latency: '280ms',
+      throughput: '45 frames/s',
+      description: 'Powers checkout-free computer-vision concessions by scanning and identifying purchased snack/beverage products dynamically.',
+      command: 'gcloud services enable vision.googleapis.com',
+      defaultLogs: [
+        "Vision API client instantiated. Monitoring high-definition RTSP streams...",
+        "Detected object: 'Beverage - Classic Cola 12oz' (Confidence: 98.4%)",
+        "Detected object: 'Snack - Salted Pretzels' (Confidence: 95.1%)"
+      ]
+    },
+    {
+      id: 'gcp_mediapipe',
+      category: 'AI, Machine Learning & Computer Vision',
+      name: 'MediaPipe Integration',
+      status: 'Edge Biometrics Ready',
+      badgeColor: 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900',
+      latency: '18ms',
+      throughput: '60 fps (Edge)',
+      description: 'Handles local low-latency turnstile biometric validations, scanning digital face models and facial descriptors directly at ticketing points.',
+      command: 'npm install @mediapipe/tasks-vision',
+      defaultLogs: [
+        "MediaPipe task scheduler initialized on local turnstile CPU core.",
+        "Running lightweight facial marker alignment...",
+        "Match score confirmed against security token database: Match (99.1%)"
+      ]
+    },
+    {
+      id: 'gcp_bigquery',
+      category: 'Data Analytics & IoT',
+      name: 'Google BigQuery',
+      status: 'Warehouse Sync Active',
+      badgeColor: 'bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-900',
+      latency: '1.2s (Batch)',
+      throughput: '12.4 TB Ingested',
+      description: 'Analyzes colossal historic stadium logs, fan attendance trends, concession revenue tallies, and staffing logs for post-match executive audits.',
+      command: 'bq query --use_legacy_sql=false "SELECT count(*) FROM stadium_ops.transactions"',
+      defaultLogs: [
+        "BigQuery cluster linked to GCS streaming exports.",
+        "Unified transactional partition updated: added 1,420 rows.",
+        "Audit check: No revenue leakage anomalies detected in the last hour."
+      ]
+    },
+    {
+      id: 'gcp_pubsub',
+      category: 'Data Analytics & IoT',
+      name: 'Google Cloud Pub/Sub',
+      status: 'Telemetry Streaming',
+      badgeColor: 'bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-900',
+      latency: '8ms',
+      throughput: '15,420 events/s',
+      description: 'The real-time ingest backbone connecting turnstiles, smart climate controllers, water flow meters, and mobile apps to analytical backends.',
+      command: 'gcloud pubsub topics publish stadium-telemetry --message="HEARTBEAT"',
+      defaultLogs: [
+        "Subscribed topic: 'stadium-telemetry-sensors-mesh'",
+        "Ingesting payload: [NodeID 1422 - Temp: 74F, Fan Level: High]",
+        "Ingesting payload: [Turnstile C4 - Ticket validated: TicketID #442a98]"
+      ]
+    },
+    {
+      id: 'gcp_dataflow',
+      category: 'Data Analytics & IoT',
+      name: 'Google Cloud Dataflow',
+      status: 'Streaming Pipeline Active',
+      badgeColor: 'bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-900',
+      latency: '85ms',
+      throughput: '12,500 messages/s',
+      description: 'Streams and filters data flowing from Pub/Sub on the fly, instantly forwarding emergency incident logs to the operator dashboard.',
+      command: 'gcloud dataflow jobs run stream-sensor-metrics --gcs-location-gs=...',
+      defaultLogs: [
+        "Dataflow streaming window finalized: 10s rolling average.",
+        "Alert validation: sensor values within standard bounds.",
+        "Transformed 142 turnstile scan intervals and streamed to client-side dashboard."
+      ]
+    },
+    {
+      id: 'gcp_cloud_sql',
+      category: 'Database & Storage',
+      name: 'Cloud SQL (PostgreSQL)',
+      status: 'Healthy Database',
+      badgeColor: 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900',
+      latency: '3ms',
+      throughput: '1.2 GB stored',
+      description: 'Stores strongly relational core details including ticket IDs, active administrator permissions, and concession POS catalog databases.',
+      command: 'gcloud sql instances describe stadium-postgres-db',
+      defaultLogs: [
+        "Cloud SQL Postgres pool connection initialized: 12 active pools.",
+        "Running database migration schema 'v1.12_stewards_allocations'...",
+        "Query result: 24 active concession stalls mapped."
+      ]
+    },
+    {
+      id: 'gcp_firestore',
+      category: 'Database & Storage',
+      name: 'Cloud Firestore',
+      status: 'NoSQL Sync Active',
+      badgeColor: 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900',
+      latency: '15ms',
+      throughput: '24,120 operations/s',
+      description: 'Syncs dynamic states instantly to fan mobile apps, enabling real-time concession order progress checks and seat upgrade notices.',
+      command: 'gcloud firestore databases list',
+      defaultLogs: [
+        "Firestore socket connected to fan clients.",
+        "Document change pushed: /orders/order_4281 (Status updated to: 'In Delivery')",
+        "Document change pushed: /tickets/gate_status (Gate C queue congestion: HIGH)"
+      ]
+    },
+    {
+      id: 'gcp_cloud_storage',
+      category: 'Database & Storage',
+      name: 'Google Cloud Storage (GCS)',
+      status: 'Asset Storage Active',
+      badgeColor: 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900',
+      latency: '40ms',
+      throughput: '110 MB/s',
+      description: 'Caches structural venue 3D models for the spatial Digital Twin, high-definition static imagery, and printable operators PDF reports.',
+      command: 'gsutil mb -l us-central1 gs://stadium-assets-bucket',
+      defaultLogs: [
+        "Fetched structural asset: 'stadium_spatial_model_highpoly.glb' (12.4 MB)",
+        "GCS object status: CACHED (CDN cloud cache hit)",
+        "Write complete: 'audit_report_2026_07_15.pdf' uploaded to /reports/ bucket."
+      ]
+    },
+    {
+      id: 'gcp_maps_platform',
+      category: 'Fan Engagement & Frontend',
+      name: 'Google Maps Platform',
+      status: '3D Tiles & Maps Active',
+      badgeColor: 'bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900',
+      latency: '24ms',
+      throughput: '42,500 map loads',
+      description: 'Uses photorealistic 3D Tiles, aerial mapping, and spatial maps to power the virtual interactive "Digital Twin" booking view and mobile maps.',
+      command: 'npm install @googlemaps/js-api-loader',
+      defaultLogs: [
+        "Maps Javascript API loaded successfully with custom theme variables.",
+        "Loaded 3D Photorealistic Tiles viewport vector mesh coordinates.",
+        "Camera locked on Stadium center stadium_stg_coliseum_99b"
+      ]
+    },
+    {
+      id: 'gcp_firebase_messaging',
+      category: 'Fan Engagement & Frontend',
+      name: 'Firebase Cloud Messaging (FCM)',
+      status: 'Pushes Delivering',
+      badgeColor: 'bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900',
+      latency: '150ms',
+      throughput: '3,200 pushes/min',
+      description: 'Sends real-time high-priority alerts directly to fan devices, detailing mobile orders completed, gate updates, or security bulletins.',
+      command: 'gcloud beta firebase messaging send --message-payload=...',
+      defaultLogs: [
+        "FCM dispatcher target resolve: /topics/stadium_alerts",
+        "Dispatched push message: 'Concession Order #4281 is ready for pick up!'",
+        "Delivery confirmation rate: 99.4% in under 500ms."
+      ]
+    },
+    {
+      id: 'gcp_firebase_auth',
+      category: 'Fan Engagement & Frontend',
+      name: 'Firebase Authentication',
+      status: 'Identity Tokens Valid',
+      badgeColor: 'bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900',
+      latency: '45ms',
+      throughput: '420 auths/s',
+      description: 'Provides rock-solid secure authentication mechanisms for fans and administrative stewards. Fully compatible with facial recognition login modules.',
+      command: 'npm install firebase/auth',
+      defaultLogs: [
+        "Auth provider linked: Google Identity & custom OAuth backend.",
+        "Token validated: user Alexander Thorne auth status: Authorized",
+        "Token renewal scheduled in 3600 seconds."
+      ]
+    },
+    {
+      id: 'gcp_looker',
+      category: 'Operational Efficiency',
+      name: 'Looker Analytics Integration',
+      status: 'Dashboards Synced',
+      badgeColor: 'bg-indigo-100 text-indigo-800 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-900',
+      latency: '2.5s (Real-time Embed)',
+      throughput: '110 embedded updates/min',
+      description: 'Embeds real-time executive analytics dashboards to track sales metrics, queue wait patterns, leakage alerts, and fan satisfaction scorecards.',
+      command: 'gcloud looker instances list',
+      defaultLogs: [
+        "Looker embed frame successfully authorized via OAuth token.",
+        "Query execution completed: calculated daily concessions EBITDA.",
+        "Render complete: Revenue Tab dynamic gauge updated."
+      ]
+    }
+  ];
+
+  const handlePingGcpService = (serviceId: string) => {
+    setIsPingingService(true);
+    const service = gcpServices.find(s => s.id === serviceId);
+    if (!service) return;
+
+    setGcpPingConsoleLogs([
+      `[DIAGNOSTICS] Pinging Google Cloud endpoint for: ${service.name}...`,
+      `[SHELL COMMAND] $ ${service.command}`,
+      `Connecting to GCP Gateway API (Region: us-central1)...`,
+      `TCP Handshake latency: ${service.latency}. Throughput active: ${service.throughput}.`
+    ]);
+
+    setTimeout(() => {
+      setGcpPingConsoleLogs(prev => [
+        ...prev,
+        `[HEALTH CHECK] Status response: 200 OK (${service.status})`,
+        ...service.defaultLogs,
+        `[SUCCESS] Diagnostics completed successfully.`
+      ]);
+      setIsPingingService(false);
+    }, 1200);
+  };
+
   // Integrations state
   const [integrations, setIntegrations] = useState([
+    { id: 'gcp_secret_manager', name: 'Google Secret Manager', status: 'Active: Secure Key Injection', type: 'security', icon: Lock },
+    { id: 'gcp_pubsub', name: 'GCP Pub/Sub Telemetry Gateway', status: 'Streaming: 15,420 events/sec', type: 'messaging', icon: Radio },
+    { id: 'gcp_cloud_run', name: 'Google Cloud Run Webhost', status: 'Hosting: Active Auto-scaling Container', type: 'compute', icon: Cpu },
+    { id: 'gcp_bigquery', name: 'Google BigQuery Warehouse', status: 'Syncing: Historical Operations Log', type: 'database', icon: Database },
     { id: 'iot', name: 'IoT Sensor Mesh', status: 'Connected: 1,240 nodes', type: 'sensors', icon: Radio },
     { id: 'cctv', name: 'CCTV Unified Feed', status: 'Status: Active (HD)', type: 'videocam', icon: Video },
     { id: 'pos', name: 'POS Terminal Hub', status: 'Integrated: 42 Vendors', type: 'point_of_sale', icon: Receipt },
@@ -500,45 +794,133 @@ export default function SettingsScreen({
           {/* Column B: Right side (Span 5 on desktop) */}
           <div className="col-span-12 lg:col-span-5 space-y-gutter">
             
-            {/* System Integrations Card */}
-            <section id="card-system-integrations" className="bg-surface-container-lowest rounded-xl p-md shadow-[0px_4px_20px_rgba(0,0,0,0.05)] border border-outline-variant/30 hover:shadow-[0px_10px_30px_rgba(0,0,0,0.08)] transition-all duration-300">
+            {/* GCP Web Services Architecture Hub */}
+            <section id="card-gcp-architecture-hub" className="bg-surface-container-lowest rounded-xl p-md shadow-[0px_4px_20px_rgba(0,0,0,0.05)] border border-outline-variant/30 hover:shadow-[0px_10px_30px_rgba(0,0,0,0.08)] transition-all duration-300">
               <div className="flex items-center gap-md border-b border-outline-variant/30 pb-md mb-md">
-                <span className="p-2 bg-tertiary-container/20 text-tertiary rounded-lg">
-                  <Cpu className="w-6 h-6 text-orange-600" />
+                <span className="p-2 bg-primary-container/20 text-primary rounded-lg">
+                  <Cpu className="w-6 h-6 text-primary" />
                 </span>
-                <h2 className="text-headline-md font-headline-md text-on-surface">System Integrations</h2>
+                <div>
+                  <h2 className="text-headline-md font-headline-md text-on-surface">GCP Web Services</h2>
+                  <p className="text-[11px] text-on-surface-variant opacity-70">Active Cloud Infrastructure for Smart Stadium Digital Assistant</p>
+                </div>
               </div>
-              
-              <div className="space-y-md">
-                {integrations.map((item) => {
-                  const IconComp = item.icon;
-                  return (
-                    <div 
-                      key={item.id}
-                      className="flex items-center justify-between p-sm bg-surface-container-low rounded-lg border border-outline-variant/20 hover:border-tertiary/50 transition-colors cursor-pointer group dark:bg-surface-container"
-                    >
-                      <div className="flex items-center gap-md">
-                        <div className="w-10 h-10 rounded-full bg-tertiary/10 flex items-center justify-center text-tertiary">
-                          <IconComp className="w-5 h-5 text-orange-600" />
-                        </div>
-                        <div>
-                          <p className="text-label-md font-bold text-on-surface">{item.name}</p>
-                          <p className="text-body-sm text-on-surface-variant opacity-60">{item.status}</p>
-                        </div>
-                      </div>
-                      <ChevronDown className="w-5 h-5 text-on-surface-variant opacity-0 group-hover:opacity-100 transition-opacity -rotate-90" />
-                    </div>
-                  );
-                })}
-                
-                <button 
-                  id="btn-add-integration"
-                  onClick={handleAddNewIntegration}
-                  className="w-full py-3 border-2 border-dashed border-outline-variant rounded-lg text-label-md font-bold text-on-surface-variant hover:border-tertiary hover:text-tertiary transition-all cursor-pointer text-center"
+
+              {/* Service selector group by category */}
+              <div className="space-y-sm">
+                <label className="text-label-sm font-black text-on-surface-variant uppercase tracking-tighter">Select Active Web Service</label>
+                <select
+                  id="select-gcp-service"
+                  value={selectedGcpServiceId}
+                  onChange={(e) => {
+                    setSelectedGcpServiceId(e.target.value);
+                    const service = gcpServices.find(s => s.id === e.target.value);
+                    if (service) {
+                      setGcpPingConsoleLogs([
+                        `[SYSTEM INFO] Loaded ${service.name} configuration context.`,
+                        `Description: ${service.description}`,
+                        `Run diagnostics below to simulate a real-time health-check query.`
+                      ]);
+                    }
+                  }}
+                  className="w-full bg-surface-container-low border border-outline-variant rounded-lg p-sm text-body-md text-on-surface dark:bg-surface-container outline-none font-bold"
                 >
-                  + Add New Integration
-                </button>
+                  <optgroup label="1. Core Infrastructure & Compute">
+                    <option value="gcp_gke">Google Kubernetes Engine (GKE)</option>
+                    <option value="gcp_cloud_run">Google Cloud Run</option>
+                    <option value="gcp_cloud_functions">Google Cloud Functions</option>
+                  </optgroup>
+                  <optgroup label="2. AI, Machine Learning & Computer Vision">
+                    <option value="gcp_vertex_ai">Vertex AI Model Registry</option>
+                    <option value="gcp_cloud_vision">Cloud Vision API</option>
+                    <option value="gcp_mediapipe">MediaPipe Integration</option>
+                  </optgroup>
+                  <optgroup label="3. Data Analytics & IoT">
+                    <option value="gcp_bigquery">Google BigQuery</option>
+                    <option value="gcp_pubsub">Google Cloud Pub/Sub</option>
+                    <option value="gcp_dataflow">Google Cloud Dataflow</option>
+                  </optgroup>
+                  <optgroup label="4. Database & Storage">
+                    <option value="gcp_cloud_sql">Cloud SQL (PostgreSQL)</option>
+                    <option value="gcp_firestore">Cloud Firestore</option>
+                    <option value="gcp_cloud_storage">Google Cloud Storage (GCS)</option>
+                  </optgroup>
+                  <optgroup label="5. Fan Engagement & Frontend">
+                    <option value="gcp_maps_platform">Google Maps Platform</option>
+                    <option value="gcp_firebase_messaging">Firebase Cloud Messaging (FCM)</option>
+                    <option value="gcp_firebase_auth">Firebase Authentication</option>
+                  </optgroup>
+                  <optgroup label="6. Operational Efficiency">
+                    <option value="gcp_looker">Looker Analytics Integration</option>
+                  </optgroup>
+                </select>
               </div>
+
+              {/* Selected service details card */}
+              {selectedGcpServiceId && (() => {
+                const service = gcpServices.find(s => s.id === selectedGcpServiceId);
+                if (!service) return null;
+                return (
+                  <div className="mt-md p-md bg-surface-container-low border border-outline-variant/40 rounded-xl space-y-md dark:bg-slate-900/20">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <span className="text-[9px] font-black uppercase tracking-widest text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+                          {service.category}
+                        </span>
+                        <h3 className="text-body-md font-black text-on-surface mt-1">{service.name}</h3>
+                      </div>
+                      <span className={`text-[10px] px-2 py-0.5 rounded font-bold border ${service.badgeColor}`}>
+                        {service.status}
+                      </span>
+                    </div>
+
+                    <p className="text-body-sm text-on-surface-variant opacity-85 leading-relaxed">
+                      {service.description}
+                    </p>
+
+                    <div className="grid grid-cols-2 gap-sm text-xs bg-white p-sm rounded-lg border border-outline-variant/20 dark:bg-slate-800/40">
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-slate-400 block">Avg Response Latency</span>
+                        <span className="font-mono font-bold text-on-surface">{service.latency}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-slate-400 block">Live Throughput</span>
+                        <span className="font-mono font-bold text-on-surface">{service.throughput}</span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-xs">
+                      <span className="text-[10px] uppercase font-black text-on-surface-variant tracking-wider">Live Diagnostics Console</span>
+                      <div className="bg-slate-950 text-slate-200 p-sm rounded-lg font-mono text-[11px] leading-relaxed max-h-[140px] overflow-y-auto space-y-1">
+                        {gcpPingConsoleLogs.map((log, idx) => (
+                          <div key={idx} className={log.includes('[SUCCESS]') ? 'text-emerald-400' : log.includes('[DIAGNOSTICS]') ? 'text-amber-400 font-bold' : log.includes('[SHELL COMMAND]') ? 'text-blue-400' : 'text-slate-300'}>
+                            {log}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <button
+                      id={`btn-ping-gcp-${service.id}`}
+                      onClick={() => handlePingGcpService(service.id)}
+                      disabled={isPingingService}
+                      className={`w-full py-2.5 rounded-lg font-bold text-xs cursor-pointer transition-all flex items-center justify-center gap-sm ${isPingingService ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-primary text-on-primary hover:bg-primary-hover shadow-sm'}`}
+                    >
+                      {isPingingService ? (
+                        <>
+                          <div className="w-3.5 h-3.5 border-2 border-slate-500 border-t-transparent rounded-full animate-spin"></div>
+                          Querying Google Cloud APIs...
+                        </>
+                      ) : (
+                        <>
+                          <Zap className="w-4 h-4" />
+                          Run Diagnostics Self-Test
+                        </>
+                      )}
+                    </button>
+                  </div>
+                );
+              })()}
             </section>
 
             {/* Data & Export Card */}
