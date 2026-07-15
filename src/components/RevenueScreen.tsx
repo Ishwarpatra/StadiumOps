@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   TrendingUp, 
   DollarSign, 
@@ -27,10 +27,43 @@ export default function RevenueScreen({ simulation, setSimulation }: RevenueScre
   const [promoSent, setPromoSent] = useState(false);
   const [activeBar, setActiveBar] = useState<BarData | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [barData, setBarData] = useState<BarData[]>(initialBarData);
+
+  const triggerToast = (msg: string, type: 'success' | 'error' | 'warning' | 'info' = 'success', title?: string) => {
+    if (typeof window !== 'undefined' && (window as any).showToast) {
+      (window as any).showToast(msg, type, title);
+    } else {
+      console.log(`[Toast Fallback] ${type.toUpperCase()}: ${msg}`);
+    }
+  };
+
+  // Fetch real-time TPM transactions from API matching backend
+  useEffect(() => {
+    const fetchTransactions = async () => {
+      try {
+        const res = await fetch('/api/pos/transactions');
+        if (res.ok) {
+          const data = await res.json();
+          setBarData(data);
+        }
+      } catch (err) {
+        console.warn('Backend offline. Displaying local cache for POS transaction TPM.');
+      }
+    };
+    fetchTransactions();
+    const interval = setInterval(fetchTransactions, 5000);
+    return () => clearInterval(interval);
+  }, [simulation.concessionsRevenue]);
 
   // Dynamic calculations
   const totalActualRevenue = simulation.concessionsRevenue + simulation.ticketingRevenue + simulation.merchandiseRevenue;
   const completionPercentage = Math.min(Math.round((totalActualRevenue / simulation.revenueGoal) * 100), 100);
+
+  // Financial tracking projections (Point 13 & 14)
+  const marginPct = 68.5; // Average operating margin for stadium operations
+  const operatingMarginDollars = Math.round(totalActualRevenue * (marginPct / 100));
+  const hourlyProjection = Math.round(totalActualRevenue * 1.15); // Dynamic 15% projection increase
+  const progressToGoal = totalActualRevenue - simulation.revenueGoal;
 
   // SVG Gauge math
   const radius = 42.5;
@@ -42,40 +75,202 @@ export default function RevenueScreen({ simulation, setSimulation }: RevenueScre
   const ticketingPct = Math.round((simulation.ticketingRevenue / totalActualRevenue) * 100) || 0;
   const merchPct = Math.round((simulation.merchandiseRevenue / totalActualRevenue) * 100) || 0;
 
-  const handleSliderChange = (key: 'concessionsRevenue' | 'ticketingRevenue' | 'merchandiseRevenue', val: number) => {
+  const handleSliderChange = async (key: 'concessionsRevenue' | 'ticketingRevenue' | 'merchandiseRevenue', val: number) => {
+    // 1. Update React state immediately
     setSimulation(prev => ({
       ...prev,
       [key]: val
     }));
+
+    // 2. Synchronize to the Node/Express backend database
+    try {
+      await fetch('/api/simulation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [key]: val })
+      });
+    } catch (err) {
+      console.warn('Backend server offline. Cached settings slider value locally.');
+    }
   };
 
-  const handleDispatchTech = () => {
+  const handleDispatchTech = async () => {
     setTechDispatched(true);
-    setTimeout(() => {
-      // simulate resolving leakage
+    triggerToast('On-Site Technician dispatched to Gate C concessions terminal.', 'info', 'Resource Dispatched');
+    
+    // Log dispatch on backend
+    try {
+       await fetch('/api/audit-logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user: "POS Vendor Coordinator",
+          action: "Dispatch Tech",
+          details: "Technician dispatched to Gate C concessions to recalibrate local broadband routers."
+        })
+      });
+    } catch (err) {
+      console.warn('Audit logger offline.');
+    }
+
+    setTimeout(async () => {
+      // simulate resolving leakage and sync on server dynamically
+      const boosterAmt = Math.round(10000 + Math.random() * 8000); // Dynamic $10,000 - $18,000 recovery
+      const updatedConcessions = simulation.concessionsRevenue + boosterAmt;
+      const updatedQueue = Math.max(simulation.avgQueueTimeSeconds - Math.round(15 + Math.random() * 15), 120);
+      
       setSimulation(prev => ({
         ...prev,
-        concessionsRevenue: prev.concessionsRevenue + 4500, // recovery spike
-        avgQueueTimeSeconds: Math.max(prev.avgQueueTimeSeconds - 12, 180)
+        concessionsRevenue: updatedConcessions,
+        avgQueueTimeSeconds: updatedQueue
       }));
-    }, 3000);
+
+      try {
+        await fetch('/api/simulation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            concessionsRevenue: updatedConcessions,
+            avgQueueTimeSeconds: updatedQueue
+          })
+        });
+
+        await fetch('/api/audit-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user: "SmartBite POS Gateway",
+            action: "Network Restored",
+            details: `POS terminals verified online. Recovered concessions revenue rate (+${boosterAmt.toLocaleString()}).`
+          })
+        });
+      } catch (err) {
+        console.warn('Offline resolution completed.');
+      }
+
+      triggerToast(`Technician completed hardware recalibration! Restored +$${boosterAmt.toLocaleString()} concessions sales flow.`, 'success', 'Terminal Recovered');
+    }, 2500);
   };
 
-  const handleTriggerPromo = () => {
+  const handleTriggerPromo = async () => {
     setPromoSent(true);
+    const merchBoostAmt = Math.round(6000 + Math.random() * 6000); // Dynamic $6,000 - $12,000 sales uplift
+    const updatedMerch = simulation.merchandiseRevenue + merchBoostAmt;
+    const updatedSentiment = Math.min(simulation.fanSentiment + 5, 100);
+
     setSimulation(prev => ({
       ...prev,
-      fanSentiment: Math.min(prev.fanSentiment + 5, 100),
-      merchandiseRevenue: prev.merchandiseRevenue + 2800
+      fanSentiment: updatedSentiment,
+      merchandiseRevenue: updatedMerch
     }));
+
+    try {
+      await fetch('/api/simulation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          merchandiseRevenue: updatedMerch,
+          fanSentiment: updatedSentiment
+        })
+      });
+
+      await fetch('/api/audit-logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user: "Operations Steward Lead",
+          action: "Promo Code Pushed",
+          details: `15% APP DISCOUNT issued to VIP Lounge Alpha. Retail merchandise sales elevated (+${merchBoostAmt.toLocaleString()}).`
+        })
+      });
+    } catch (err) {
+      console.warn('Failed to push promo audit.');
+    }
+
+    triggerToast(`Promo push active in VIP Lounge Alpha! Merchandise sales boosted by +$${merchBoostAmt.toLocaleString()}.`, 'success', 'Promo Code Pushed');
   };
 
+  // Real client-side PDF Document Blob downloader (No fake alerts) (Point 11)
   const handleExportReport = () => {
     setExporting(true);
     setTimeout(() => {
       setExporting(false);
-      alert(`StadiumOps Pro: Financial Revenue Report generated successfully!\nActual Revenue: $${(totalActualRevenue / 1000000).toFixed(2)}M / Goal: $${(simulation.revenueGoal / 1000000).toFixed(2)}M\nConcessions: $${simulation.concessionsRevenue.toLocaleString()}\nTicketing: $${simulation.ticketingRevenue.toLocaleString()}\nMerchandise: $${simulation.merchandiseRevenue.toLocaleString()}`);
-    }, 1500);
+      
+      const pdfText = 
+`%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R /MediaBox [0 0 595.28 841.89] >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+5 0 obj
+<< /Length 750 >>
+stream
+BT
+/F1 18 Tf
+70 770 TD
+(STADIUMOPS PRO - FINANCIAL REVENUE REPORT) Tj
+/F1 12 Tf
+0 -40 TD
+(Date: 2026-07-15) Tj
+0 -20 TD
+(Daily Financial Target Audits and Operational Ledger) Tj
+0 -40 TD
+(==================================================================) Tj
+0 -30 TD
+(Actual Revenue Total: $${(totalActualRevenue / 1000000).toFixed(3)}M) Tj
+0 -20 TD
+(Revenue Daily Target: $${(simulation.revenueGoal / 1000000).toFixed(3)}M) Tj
+0 -20 TD
+(Target Accomplished: ${completionPercentage}%) Tj
+0 -30 TD
+(Ledger Itemized Sales Channels:) Tj
+0 -20 TD
+(  - Concessions Food & Beverage: $${simulation.concessionsRevenue.toLocaleString()}) Tj
+0 -20 TD
+(  - Ticketing Entrance Ingress: $${simulation.ticketingRevenue.toLocaleString()}) Tj
+0 -20 TD
+(  - Merchandise & Retail Fan Apparel: $${simulation.merchandiseRevenue.toLocaleString()}) Tj
+0 -40 TD
+(Estimated Net Operating Profit Margin (68.5%): $${operatingMarginDollars.toLocaleString()}) Tj
+0 -20 TD
+(Projected End-of-Event Volume: $${hourlyProjection.toLocaleString()}) Tj
+0 -40 TD
+(==================================================================) Tj
+0 -20 TD
+(End of Handshake File Stream. Authorized by StadiumOps Secure Sandbox Server.) Tj
+ET
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000056 00000 n 
+0000000111 00000 n 
+0000000223 00000 n 
+0000000298 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1110
+%%EOF`;
+
+      const blob = new Blob([pdfText], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `stadiumops_pro_revenue_audit_report_${Date.now()}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+    }, 1200);
   };
 
   return (
@@ -270,43 +465,71 @@ export default function RevenueScreen({ simulation, setSimulation }: RevenueScre
         {/* Leakage & Alerts Column */}
         <div className="lg:col-span-4 flex flex-col gap-4">
           
-          {/* Main Leakage Alert Card */}
-          <div className="bg-red-50 rounded-2xl p-5 shadow-md border border-red-100 flex-1 flex flex-col justify-between">
-            <div className="flex items-start gap-3">
-              <span className="p-2 bg-red-100 text-red-700 rounded-xl">
-                <AlertTriangle className="w-5 h-5 animate-pulse" />
-              </span>
-              <div>
-                <h4 className="text-xs font-bold text-red-800 uppercase tracking-wider">
-                  Leakage Alert
-                </h4>
-                <p className="text-xs text-red-900 font-semibold mt-1">
-                  Potential missed revenue detected at <strong className="font-extrabold text-slate-900">Gate C Concessions</strong>.
+          {/* Dynamic Leakage Alert Card */}
+          {simulation.concessionsRevenue < 450000 ? (
+            <div className="bg-red-50 rounded-2xl p-5 shadow-md border border-red-100 flex-1 flex flex-col justify-between">
+              <div className="flex items-start gap-3">
+                <span className="p-2 bg-red-100 text-red-700 rounded-xl">
+                  <AlertTriangle className="w-5 h-5 animate-pulse" />
+                </span>
+                <div>
+                  <h4 className="text-xs font-bold text-red-800 uppercase tracking-wider">
+                    Leakage Alert Active
+                  </h4>
+                  <p className="text-xs text-red-900 font-semibold mt-1">
+                    Potential missed revenue detected at <strong className="font-extrabold text-slate-900">Gate C Concessions</strong>.
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-white/70 rounded-xl p-3 border border-red-200/50 mt-3">
+                <p className="text-[11px] leading-relaxed text-red-900">
+                  Transaction rate is dropped {Math.round((1 - (simulation.concessionsRevenue / 485400)) * 100)}% below historical baseline. Please dispatch tech.
                 </p>
               </div>
-            </div>
 
-            <div className="bg-white/70 rounded-xl p-3 border border-red-200/50 mt-3">
-              <p className="text-[11px] leading-relaxed text-red-900">
-                Transaction rate dropped 40% below historical baseline during Q1 break. Check POS terminals.
-              </p>
+              <button
+                onClick={handleDispatchTech}
+                disabled={techDispatched}
+                className="mt-4 w-full py-2.5 px-4 bg-transparent hover:bg-red-600/10 border border-red-600 text-red-600 hover:text-red-700 font-bold text-xs rounded-xl transition-all cursor-pointer active:scale-95 disabled:bg-emerald-50 disabled:border-emerald-600 disabled:text-emerald-700 flex items-center justify-center gap-1"
+              >
+                {techDispatched ? (
+                  <>
+                    <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                    Tech Dispatched to POS
+                  </>
+                ) : (
+                  'Dispatch On-Site Tech'
+                )}
+              </button>
             </div>
+          ) : (
+            <div className="bg-emerald-50 rounded-2xl p-5 shadow-md border border-emerald-100 flex-1 flex flex-col justify-between">
+              <div className="flex items-start gap-3">
+                <span className="p-2 bg-emerald-100 text-emerald-700 rounded-xl">
+                  <CheckCircle className="w-5 h-5" />
+                </span>
+                <div>
+                  <h4 className="text-xs font-bold text-emerald-800 uppercase tracking-wider">
+                    Leakage Status Stable
+                  </h4>
+                  <p className="text-xs text-emerald-900 font-semibold mt-1">
+                    All concessions POS devices are communicating normally.
+                  </p>
+                </div>
+              </div>
 
-            <button
-              onClick={handleDispatchTech}
-              disabled={techDispatched}
-              className="mt-4 w-full py-2.5 px-4 bg-transparent hover:bg-red-600/10 border border-red-600 text-red-600 hover:text-red-700 font-bold text-xs rounded-xl transition-all cursor-pointer active:scale-95 disabled:bg-emerald-50 disabled:border-emerald-600 disabled:text-emerald-700 flex items-center justify-center gap-1"
-            >
-              {techDispatched ? (
-                <>
-                  <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-                  Tech Dispatched to POS
-                </>
-              ) : (
-                'Dispatch On-Site Tech'
-              )}
-            </button>
-          </div>
+              <div className="bg-white/70 rounded-xl p-3 border border-emerald-200/50 mt-3">
+                <p className="text-[11px] leading-relaxed text-emerald-900">
+                  Transaction rate is at {Math.round((simulation.concessionsRevenue / 485400) * 100)}% of baseline volume. Revenue flows optimized.
+                </p>
+              </div>
+
+              <div className="mt-4 w-full py-2.5 px-4 bg-emerald-100 text-emerald-800 font-bold text-xs rounded-xl text-center border border-emerald-200">
+                POS Grid Healthy
+              </div>
+            </div>
+          )}
 
           {/* Info Card */}
           <div className="bg-amber-50 rounded-2xl p-5 shadow-md border border-amber-100 flex-1 flex flex-col justify-between">
@@ -371,7 +594,7 @@ export default function RevenueScreen({ simulation, setSimulation }: RevenueScre
 
         {/* Bars Container */}
         <div className="h-64 flex items-end justify-between px-2 pt-6 gap-2 md:gap-4">
-          {initialBarData.map((bar, i) => (
+          {barData.map((bar, i) => (
             <div 
               key={bar.label} 
               className="flex-1 flex flex-col justify-end items-center h-full group cursor-pointer relative"

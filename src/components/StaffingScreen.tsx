@@ -21,6 +21,41 @@ import {
 } from 'lucide-react';
 import { Hotspot, SimulationState } from '../types';
 
+const getHotspotCoordinates = (hotspot: Hotspot) => {
+  const loc = hotspot.location.toLowerCase();
+  if (loc.includes('gate c') || hotspot.id.includes('gate-c') || hotspot.id === '1' || hotspot.id === 'inc_default_2') {
+    return { top: '32%', left: '24%', pulseColor: 'bg-red-600', glowColor: 'bg-red-500/30' };
+  }
+  if (loc.includes('114') || hotspot.id.includes('114') || hotspot.id === '2') {
+    return { top: '58%', left: '48%', pulseColor: 'bg-amber-500', glowColor: 'bg-amber-500/20' };
+  }
+  if (loc.includes('alpha') || loc.includes('vip') || hotspot.id === '4' || hotspot.id === 'inc_default_1') {
+    return { top: '28%', left: '64%', pulseColor: 'bg-amber-500', glowColor: 'bg-amber-500/25' };
+  }
+  if (loc.includes('gate b') || loc.includes('gate-b')) {
+    return { top: '35%', left: '76%', pulseColor: 'bg-red-600', glowColor: 'bg-red-500/30' };
+  }
+  if (loc.includes('west') || loc.includes('ticket')) {
+    return { top: '52%', left: '18%', pulseColor: 'bg-blue-500', glowColor: 'bg-blue-500/20' };
+  }
+  
+  // Deterministic fallback for dynamic ones
+  let hash = 0;
+  for (let i = 0; i < hotspot.location.length; i++) {
+    hash = hotspot.location.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const topVal = 22 + Math.abs((hash % 55)); 
+  const leftVal = 18 + Math.abs(((hash >> 3) % 65)); 
+  const isHigh = hotspot.priority === 'high';
+  
+  return {
+    top: `${topVal}%`,
+    left: `${leftVal}%`,
+    pulseColor: isHigh ? 'bg-red-600' : 'bg-amber-500',
+    glowColor: isHigh ? 'bg-red-500/30' : 'bg-amber-500/20'
+  };
+};
+
 interface StaffingScreenProps {
   simulation: SimulationState;
   setSimulation: React.Dispatch<React.SetStateAction<SimulationState>>;
@@ -41,86 +76,171 @@ export default function StaffingScreen({
   const [syncing, setSyncing] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
 
-  const handleSyncMap = () => {
-    setSyncing(true);
-    setTimeout(() => {
-      setSyncing(false);
-      // randomize wait times and incidents slightly for live effect
-      setSimulation(prev => ({
-        ...prev,
-        avgQueueTimeSeconds: Math.max(160, prev.avgQueueTimeSeconds + (Math.random() > 0.5 ? 12 : -18)),
-        incidentsPending: prev.incidentsPending + (Math.random() > 0.7 ? 1 : 0)
-      }));
-    }, 1200);
-  };
-
-  const handleDeployStaff = (hotspotId: string) => {
-    setHotspots(prev => prev.map(h => {
-      if (h.id === hotspotId) {
-        return {
-          ...h,
-          staffAssigned: h.staffAssigned + 2,
-          status: 'dispatched'
-        };
-      }
-      return h;
-    }));
-
-    // Increment active staff in simulation
-    setSimulation(prev => ({
-      ...prev,
-      activeStaff: Math.min(prev.activeStaff + 2, prev.targetStaff)
-    }));
-
-    // Update selected hotspot details if open
-    if (selectedHotspot && selectedHotspot.id === hotspotId) {
-      setSelectedHotspot(prev => prev ? {
-        ...prev,
-        staffAssigned: prev.staffAssigned + 2,
-        status: 'dispatched'
-      } : null);
+  const triggerToast = (msg: string, type: 'success' | 'error' | 'warning' | 'info' = 'success', title?: string) => {
+    if (typeof window !== 'undefined' && (window as any).showToast) {
+      (window as any).showToast(msg, type, title);
+    } else {
+      console.log(`[Toast Fallback] ${type.toUpperCase()}: ${msg}`);
     }
   };
 
-  const handleStatusUpdate = (hotspotId: string) => {
-    setHotspots(prev => prev.map(h => {
-      if (h.id === hotspotId) {
-        const nextStatus = h.status === 'pending' ? 'dispatched' : 'resolved';
-        return { ...h, status: nextStatus };
-      }
-      return h;
-    }));
+  const handleSyncMap = async () => {
+    setSyncing(true);
+    try {
+      const simRes = await fetch('/api/simulation');
+      const incRes = await fetch('/api/incidents');
+      
+      if (simRes.ok && incRes.ok) {
+        const simData = await simRes.json();
+        const incData = await incRes.json();
 
-    // If resolved, update resolved simulation metrics
-    setHotspots(prev => {
-      const target = prev.find(h => h.id === hotspotId);
-      if (target && target.status === 'resolved') {
-        setSimulation(s => ({
-          ...s,
-          incidentsResolved: s.incidentsResolved + 1,
-          incidentsPending: Math.max(s.incidentsPending - 1, 0)
+        setSimulation(prev => ({
+          ...prev,
+          ...simData
         }));
+
+        const mappedHotspots: Hotspot[] = incData
+          .filter((inc: any) => inc.type !== 'revenue')
+          .map((inc: any) => ({
+            id: inc.id,
+            location: inc.location,
+            priority: inc.priority,
+            description: inc.description,
+            status: inc.status,
+            staffAssigned: inc.staffAssigned || 0,
+            type: inc.type || 'security'
+          }));
         
-        // Also remove bottlenecks associated
-        if (target.location === 'Gate C Entrance') {
-          setBottlenecks(b => b.filter(item => item.location !== 'Gate C'));
+        setHotspots(mappedHotspots);
+
+        await fetch('/api/audit-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user: "Console Operator",
+            action: "Manual Map Refresh",
+            details: "Manual synchronisation request of active IoT gate and ticket hub telemetry successfully processed."
+          })
+        });
+      }
+    } catch (err) {
+      console.warn("Backend sync failed.");
+    } finally {
+      setTimeout(() => {
+        setSyncing(false);
+      }, 600);
+    }
+  };
+
+  const handleDeployStaff = async (hotspotId: string) => {
+    const hs = hotspots.find(h => h.id === hotspotId);
+    if (!hs) return;
+    const newStaff = hs.staffAssigned + 2;
+
+    try {
+      const res = await fetch(`/api/incidents/${hotspotId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'dispatched',
+          staffAssigned: newStaff
+        })
+      });
+
+      if (res.ok) {
+        await fetch('/api/audit-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user: "Console Operator",
+            action: "Staff Redeployment",
+            details: `Dispatched +2 operators to ${hs.location} (Total Staff Assigned: ${newStaff}).`
+          })
+        });
+
+        setHotspots(prev => prev.map(h => {
+          if (h.id === hotspotId) {
+            return {
+              ...h,
+              staffAssigned: newStaff,
+              status: 'dispatched'
+            };
+          }
+          return h;
+        }));
+
+        setSimulation(prev => ({
+          ...prev,
+          activeStaff: Math.min(prev.activeStaff + 2, prev.targetStaff)
+        }));
+
+        if (selectedHotspot && selectedHotspot.id === hotspotId) {
+          setSelectedHotspot(prev => prev ? {
+            ...prev,
+            staffAssigned: newStaff,
+            status: 'dispatched'
+          } : null);
         }
       }
-      return prev;
-    });
-
-    if (selectedHotspot && selectedHotspot.id === hotspotId) {
-      setSelectedHotspot(prev => {
-        if (!prev) return null;
-        const nextStatus = prev.status === 'pending' ? 'dispatched' : 'resolved';
-        return { ...prev, status: nextStatus };
-      });
+    } catch (err) {
+      console.warn("Backend offline. Fallback to local dispatch.");
     }
   };
 
-  // Quick Deploy Scenarios
-  const handleGateSurgeScenario = () => {
-    // Dispatch security to gate hotspots
+  const handleStatusUpdate = async (hotspotId: string) => {
+    const hs = hotspots.find(h => h.id === hotspotId);
+    if (!hs) return;
+    const nextStatus = hs.status === 'pending' ? 'dispatched' : 'resolved';
+
+    try {
+      const res = await fetch(`/api/incidents/${hotspotId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: nextStatus
+        })
+      });
+
+      if (res.ok) {
+        await fetch('/api/audit-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user: "Console Operator",
+            action: "Hotspot Incident Lifecycle",
+            details: `Hotspot at ${hs.location} transition from "${hs.status}" to "${nextStatus}".`
+          })
+        });
+
+        setHotspots(prev => prev.map(h => {
+          if (h.id === hotspotId) {
+            return { ...h, status: nextStatus };
+          }
+          return h;
+        }));
+
+        if (nextStatus === 'resolved') {
+          setSimulation(s => ({
+            ...s,
+            incidentsResolved: s.incidentsResolved + 1,
+            incidentsPending: Math.max((s.incidentsPending ?? 0) - 1, 0)
+          }));
+          
+          if (hs.location === 'Gate C Entrance') {
+            setBottlenecks(b => b.filter(item => item.location !== 'Gate C'));
+          }
+        }
+
+        if (selectedHotspot && selectedHotspot.id === hotspotId) {
+          setSelectedHotspot(prev => prev ? { ...prev, status: nextStatus } : null);
+        }
+      }
+    } catch (err) {
+      console.warn("Backend offline. Status update fallback.");
+    }
+  };
+
+  const handleGateSurgeScenario = async () => {
     setHotspots(prev => prev.map(h => {
       if (h.type === 'security') {
         return { ...h, status: 'dispatched', staffAssigned: h.staffAssigned + 4 };
@@ -130,29 +250,73 @@ export default function StaffingScreen({
 
     setSimulation(prev => ({
       ...prev,
-      activeStaff: prev.targetStaff, // full capacity
+      activeStaff: prev.targetStaff,
       avgQueueTimeSeconds: Math.max(prev.avgQueueTimeSeconds - 45, 120),
       incidentsResolved: prev.incidentsResolved + 1
     }));
     
-    // clear security bottlenecks
     setBottlenecks(b => b.filter(item => item.location !== 'Gate B'));
 
-    alert('Quick Deploy: Gate Surge Response Activated!\nFull security details deployed to high-congestion channels.\nWait times projected to decline.');
+    try {
+      await fetch('/api/simulation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          activeStaff: simulation.targetStaff,
+          avgQueueTimeSeconds: Math.max(simulation.avgQueueTimeSeconds - 45, 120)
+        })
+      });
+
+      await fetch('/api/audit-logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user: "GCP Operations Controller",
+          action: "Quick Deploy Scenario",
+          details: "Scenario Triggered: 'Gate Surge Response' activated. Full security details dispatched."
+        })
+      });
+    } catch (err) {
+      console.warn("Scenario sync failed.");
+    }
+
+    triggerToast('Gate Surge Response Activated! Full security details deployed. Wait times projected to decline.', 'success', 'Gate Surge');
   };
 
-  const handleMedicalAssistScenario = () => {
+  const handleMedicalAssistScenario = async () => {
     setSimulation(prev => ({
       ...prev,
       fanSentiment: Math.min(prev.fanSentiment + 4, 100),
       incidentsResolved: prev.incidentsResolved + 1,
-      incidentsPending: Math.max(prev.incidentsPending - 1, 0)
+      incidentsPending: Math.max((prev.incidentsPending ?? 0) - 1, 0)
     }));
-    alert('Quick Deploy: Medical Standby dispatched to Section 109 request. SLA time met.');
+
+    try {
+      await fetch('/api/simulation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fanSentiment: Math.min(simulation.fanSentiment + 4, 100)
+        })
+      });
+
+      await fetch('/api/audit-logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user: "GCP Operations Controller",
+          action: "Quick Deploy Scenario",
+          details: "Scenario Triggered: 'Medical Assist Dispatch'. Fan sentiment boosted by rapid intervention."
+        })
+      });
+    } catch (err) {
+      console.warn("Medical scenario sync failed.");
+    }
+
+    triggerToast('Medical Standby dispatched to Sector 114 concourse. Incident resolved. Fan sentiment improved.', 'success', 'Medical Assist');
   };
 
-  const handleMassCleanupScenario = () => {
-    // Resolve all spill/janitorial hotspots
+  const handleMassCleanupScenario = async () => {
     setHotspots(prev => prev.map(h => {
       if (h.type === 'janitorial') {
         return { ...h, status: 'resolved', staffAssigned: h.staffAssigned + 2 };
@@ -163,10 +327,33 @@ export default function StaffingScreen({
     setSimulation(prev => ({
       ...prev,
       incidentsResolved: prev.incidentsResolved + 1,
-      incidentsPending: Math.max(prev.incidentsPending - 1, 0)
+      incidentsPending: Math.max((prev.incidentsPending ?? 0) - 1, 0)
     }));
 
-    alert('Quick Deploy: Concourse deep clean sweep activated. Spill hazards resolved.');
+    try {
+      await fetch('/api/simulation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          incidentsResolved: simulation.incidentsResolved + 1,
+          incidentsPending: Math.max((simulation.incidentsPending ?? 0) - 1, 0)
+        })
+      });
+
+      await fetch('/api/audit-logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user: "GCP Operations Controller",
+          action: "Quick Deploy Scenario",
+          details: "Scenario Triggered: 'Concourse Deep Clean Sweep'. Handled liquid hazards."
+        })
+      });
+    } catch (err) {
+      console.warn("Cleanup scenario sync failed.");
+    }
+
+    triggerToast('Concourse deep clean sweep activated. Spill hazards resolved.', 'success', 'Deep Clean Sweep');
   };
 
   // Filters
@@ -302,20 +489,12 @@ export default function StaffingScreen({
 
             {/* Simulated Heatmap Glows & Nodes */}
             {hotspots.filter(h => h.status !== 'resolved').map(h => {
-              // Position approximations on blueprint
-              let top = '40%';
-              let left = '30%';
-              let glowColor = 'bg-red-500/20';
-              let pulseColor = 'bg-red-600';
-
-              if (h.id === '1') { top = '32%'; left = '24%'; glowColor = 'bg-red-500/30'; }
-              if (h.id === '2') { top = '58%'; left = '48%'; glowColor = 'bg-amber-500/20'; pulseColor = 'bg-amber-500'; }
-              if (h.id === '4') { top = '28%'; left = '64%'; glowColor = 'bg-amber-500/25'; pulseColor = 'bg-amber-500'; }
+              const { top, left, pulseColor, glowColor } = getHotspotCoordinates(h);
 
               return (
                 <div 
                   key={h.id} 
-                  className="absolute cursor-pointer group select-none"
+                  className="absolute cursor-pointer group select-none transition-all duration-500"
                   style={{ top, left }}
                   onClick={() => setSelectedHotspot(h)}
                 >
@@ -328,7 +507,7 @@ export default function StaffingScreen({
                   </div>
 
                   {/* Tiny Name Tag */}
-                  <div className="absolute top-6 left-1/2 -translate-x-1/2 bg-slate-900/90 text-white rounded px-2 py-0.5 text-[8px] font-mono whitespace-nowrap shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none">
+                  <div className="absolute top-6 left-1/2 -translate-x-1/2 bg-slate-900/90 text-white rounded px-2 py-0.5 text-[8px] font-mono whitespace-nowrap shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none font-bold">
                     {h.location}
                   </div>
                 </div>

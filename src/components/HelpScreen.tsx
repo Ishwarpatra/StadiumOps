@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Search, 
   Wrench, 
@@ -19,6 +19,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { SimulationState } from '../types';
+import { generateUUID } from '../utils/uuid';
 
 interface HelpScreenProps {
   simulation: SimulationState;
@@ -51,9 +52,28 @@ export default function HelpScreen({ simulation, setSimulation }: HelpScreenProp
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
 
+  // Loaded tickets from backend DB
+  const [loadedTickets, setLoadedTickets] = useState<{ id: string; subject: string; message: string; status: string; created: string }[]>([]);
+
   // Diagnostics state
   const [diagnosticsResult, setDiagnosticsResult] = useState<string | null>(null);
   const [isRunningDiagnostics, setIsRunningDiagnostics] = useState(false);
+
+  const fetchTickets = async () => {
+    try {
+      const res = await fetch('/api/tickets');
+      if (res.ok) {
+        const data = await res.json();
+        setLoadedTickets(data);
+      }
+    } catch (err) {
+      console.warn('Backend offline. Loaded tickets fallback to local state.');
+    }
+  };
+
+  useEffect(() => {
+    fetchTickets();
+  }, []);
 
   const articles: Article[] = [
     { id: '1', title: 'Gate C Turnstile Reset', description: 'Locate physical override under primary kiosk base, hold 5s until LED blinks yellow.', category: 'hardware' },
@@ -91,44 +111,189 @@ export default function HelpScreen({ simulation, setSimulation }: HelpScreenProp
     }, 1200);
   };
 
-  const handleCreateTicket = (e: React.FormEvent) => {
+  const handleCreateTicket = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!ticketSubject.trim() || !ticketDetails.trim()) return;
 
     setTicketStatus('submitting');
-    setTimeout(() => {
+    try {
+      const res = await fetch('/api/tickets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subject: ticketSubject,
+          message: ticketDetails
+        })
+      });
+      if (res.ok) {
+        setTicketStatus('success');
+        setTicketSubject('');
+        setTicketDetails('');
+        fetchTickets(); // Refresh list!
+        
+        // Log ticket to audit log as well (State Consistency Point 15)
+        await fetch('/api/audit-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user: "Console Operator",
+            action: "Ticket Filed",
+            details: `Urgent support ticket created: "${ticketSubject}"`
+          })
+        });
+
+        setTimeout(() => setTicketStatus('idle'), 4000);
+      } else {
+        throw new Error('Server returned error');
+      }
+    } catch (err) {
+      // Local fallback if server offline
+      setLoadedTickets(prev => [
+        ...prev,
+        {
+          id: 't_local_' + generateUUID(),
+          subject: ticketSubject,
+          message: ticketDetails,
+          status: 'open',
+          created: new Date().toISOString()
+        }
+      ]);
       setTicketStatus('success');
       setTicketSubject('');
       setTicketDetails('');
       setTimeout(() => setTicketStatus('idle'), 4000);
-    }, 1000);
+    }
   };
 
-  const handleFeedbackSubmit = (e: React.FormEvent) => {
+  const handleFeedbackSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!feedbackText.trim()) return;
     setFeedbackSubmitted(true);
+    
+    try {
+      await fetch('/api/audit-logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user: "Console Operator",
+          action: "Feedback Submitted",
+          details: `User submitted suggestion: "${feedbackText.substring(0, 100)}..."`
+        })
+      });
+    } catch (err) {
+      console.warn('Offline audit log failed.');
+    }
+
     setFeedbackText('');
     setTimeout(() => setFeedbackSubmitted(false), 4500);
   };
 
-  const runHelpDiagnostics = () => {
+  const runHelpDiagnostics = async () => {
     setIsRunningDiagnostics(true);
-    setDiagnosticsResult('Pinging local telemetry clusters and gate turnstiles...');
-    setTimeout(() => {
-      const waitTime = simulation.avgQueueTimeSeconds;
-      let advice = '';
+    setDiagnosticsResult('Executing full-stack operational telemetry sweep...');
+    
+    const start = Date.now();
+    try {
+      const healthRes = await fetch('/api/health');
+      const healthData = healthRes.ok ? await healthRes.json() : null;
+      
+      const configRes = await fetch('/api/config');
+      const configData = configRes.ok ? await configRes.json() : null;
 
-      if (simulation.incidentsPending > 0) {
-        advice = `Found ${simulation.incidentsPending} outstanding hotspots. We recommend deploying staff reinforcements immediately to clear queue blocks.`;
-      } else if (waitTime > 200) {
-        advice = `Avg queue wait time is critical (${waitTime}s). Consider offering concessions promos or increasing staff active thresholds in Concessions settings.`;
+      const duration = Date.now() - start;
+      const waitTime = simulation.avgQueueTimeSeconds;
+      
+      let advice = '';
+      if (!healthData) {
+        advice = 'CRITICAL DIAGNOSTICS ALERT: The Node/Express backend server appears to be unreachable. Check sandbox gateway routes.';
       } else {
-        advice = `Diagnostics scan complete. All network arrays operational. Stadium sentiment is strong at ${simulation.fanSentiment}% with ${simulation.incidentsResolved} incidents resolved successfully.`;
+        advice = `[200 OK Handshake: ${duration}ms] Backend operational (Status: "${healthData.status}").\n` +
+                 `Active GCP Colosseum ID: "${configData?.stadiumId || 'stadium_stg_coliseum_99b'}".\n` +
+                 `Operational Metrics: Sentiment is ${simulation.fanSentiment}%, standard queue delay is ${waitTime}s.\n`;
+        
+        if ((simulation.incidentsPending ?? 0) > 0) {
+          advice += `RECOMMENDATION: Deploy staff reinforcements immediately to clear the ${simulation.incidentsPending ?? 0} unresolved gate/retail hotspots.`;
+        } else if (waitTime > 200) {
+          advice += 'RECOMMENDATION: Queue times are elevated. Trigger temporary 15% discount or increase Concessions target thresholds.';
+        } else {
+          advice += 'RECOMMENDATION: All systems nominal. Active POS turnstiles are reporting high throughput.';
+        }
       }
       setDiagnosticsResult(advice);
+    } catch (err) {
+      setDiagnosticsResult('DIAGNOSTICS ERROR: Failed to communicate with sandbox API channels. Check local server stack.');
+    } finally {
       setIsRunningDiagnostics(false);
-    }, 800);
+    }
+  };
+
+  const handleDownloadResource = (resource: 'manual' | 'api' | 'firmware') => {
+    let content = '';
+    let filename = '';
+    let contentType = 'text/plain';
+
+    if (resource === 'manual') {
+      content = `STADIUMOPS PRO CONSOLE SUITE
+===========================
+MANUAL EDITION 2024 - CONFIDENTIAL
+For Authorized GCP Operations Stewards Only
+
+1. TURNSTILE DEVICE MANAGEMENT
+   If Gate turnstile counters lag or freeze, hold the physical manual override
+   button under the base housing for 5 seconds until status LED flashes Amber.
+   You can also reboot device clusters remotely via the Settings tab.
+
+2. POS PAYMENT OFFLINE BUFFERING
+   All terminal micro-controllers buffer up to 400 transaction records locally
+   during wireless network drops. On mesh recovery, transaction logs will auto-sync
+   and post back to the central gateway database.
+`;
+      filename = 'stadiumops_operator_manual_2024.txt';
+    } else if (resource === 'api') {
+      content = `# StadiumOps Core Operational Telemetry REST API
+==================================================
+
+All endpoints require credential handshakes starting with 'sk_stadiumops_' header.
+
+## GET /api/simulation
+Returns live dashboard variable synchronizer payload.
+Response:
+{
+  "attendance": 34500,
+  "activeStaff": 382,
+  "avgQueueTimeSeconds": 195,
+  "revenueGoal": 1500000,
+  "isOnline": true
+}
+
+## POST /api/tickets
+Submit a new support ticket to the backend database.
+Request body: { "subject": "Gate C turnstile queue", "message": "Queue times elevated" }
+`;
+      filename = 'stadiumops_api_endpoints.md';
+    } else {
+      content = JSON.stringify({
+        bundleId: "fw_stadium_coliseum_v4.2.3",
+        buildDate: "2026-07-15T07:38:48Z",
+        targetHardware: "NFC_Reader_Terminals_A2",
+        romVersion: "4.2.3",
+        payloadChecksum: "0x8f7d6a2e",
+        modules: [
+          { name: "NFC_Driver", size: 1024, version: "2.1.0" },
+          { name: "Offline_Buffer_Manager", size: 2048, version: "3.5.1" }
+        ]
+      }, null, 2);
+      filename = 'stadiumops_firmware_v4.2.json';
+      contentType = 'application/json';
+    }
+
+    const blob = new Blob([content], { type: contentType });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   // Filter articles based on category select and search query
@@ -402,37 +567,37 @@ export default function HelpScreen({ simulation, setSimulation }: HelpScreenProp
               <a 
                 className="flex items-center justify-between p-md bg-white rounded-xl hover:shadow-md transition-all group border border-slate-200/80" 
                 href="#"
-                onClick={(e) => { e.preventDefault(); alert("Downloading '2024 Operator Manual.pdf' to downloads folder..."); }}
+                onClick={(e) => { e.preventDefault(); handleDownloadResource('manual'); }}
               >
                 <div className="flex items-center gap-sm">
                   <FileText className="text-on-surface-variant group-hover:text-primary w-5 h-5" />
                   <span className="text-label-md font-label-md text-slate-800 font-semibold">2024 Operator Manual</span>
                 </div>
-                <span className="text-xs bg-slate-100 text-slate-500 font-bold px-2 py-1 rounded">PDF</span>
+                <span className="text-xs bg-slate-100 text-slate-500 font-bold px-2 py-1 rounded">TXT</span>
               </a>
 
               <a 
                 className="flex items-center justify-between p-md bg-white rounded-xl hover:shadow-md transition-all group border border-slate-200/80" 
                 href="#"
-                onClick={(e) => { e.preventDefault(); alert("Accessing Live API developer documentation endpoint: /api/v1/telemetry"); }}
+                onClick={(e) => { e.preventDefault(); handleDownloadResource('api'); }}
               >
                 <div className="flex items-center gap-sm">
                   <Code className="text-on-surface-variant group-hover:text-primary w-5 h-5" />
                   <span className="text-label-md font-label-md text-slate-800 font-semibold">API Documentation</span>
                 </div>
-                <span className="text-xs bg-slate-100 text-slate-500 font-bold px-2 py-1 rounded">SWAGGER</span>
+                <span className="text-xs bg-slate-100 text-slate-500 font-bold px-2 py-1 rounded">MD</span>
               </a>
 
               <a 
                 className="flex items-center justify-between p-md bg-white rounded-xl hover:shadow-md transition-all group border border-slate-200/80" 
                 href="#"
-                onClick={(e) => { e.preventDefault(); alert("Downloading active Firmware bundle v4.2.3 to connected servers..."); }}
+                onClick={(e) => { e.preventDefault(); handleDownloadResource('firmware'); }}
               >
                 <div className="flex items-center gap-sm">
                   <Cpu className="text-on-surface-variant group-hover:text-primary w-5 h-5" />
                   <span className="text-label-md font-label-md text-slate-800 font-semibold">Firmware Bundle v4.2</span>
                 </div>
-                <span className="text-xs bg-slate-100 text-slate-500 font-bold px-2 py-1 rounded">BIN</span>
+                <span className="text-xs bg-slate-100 text-slate-500 font-bold px-2 py-1 rounded">JSON</span>
               </a>
             </div>
           </div>
@@ -617,6 +782,62 @@ export default function HelpScreen({ simulation, setSimulation }: HelpScreenProp
             )}
           </div>
         </div>
+      </section>
+
+      {/* Active Platform Tickets */}
+      <section className="bg-white rounded-3xl p-lg border border-outline-variant shadow-sm space-y-md">
+        <div className="flex justify-between items-center border-b border-slate-100 pb-sm">
+          <div>
+            <h4 className="text-base font-display font-bold text-slate-900">Active Support Tickets</h4>
+            <p className="text-xs text-on-surface-variant">
+              Live synchronization with Node/Express persistent memory database
+            </p>
+          </div>
+          <span className="text-xs font-mono bg-blue-50 text-blue-700 font-bold px-2.5 py-1 rounded-full">
+            {loadedTickets.length} Sync'd
+          </span>
+        </div>
+
+        {loadedTickets.length === 0 ? (
+          <div className="p-8 text-center text-xs text-slate-450 font-semibold italic">
+            No active support tickets filed. Use the form above to submit ticket details.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs text-slate-700">
+              <thead>
+                <tr className="bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                  <th className="px-4 py-3">ID</th>
+                  <th className="px-4 py-3">Subject</th>
+                  <th className="px-4 py-3">Message Details</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Created</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {loadedTickets.map((ticket) => (
+                  <tr key={ticket.id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="px-4 py-3 font-mono font-bold text-slate-500">{ticket.id.substring(0, 8)}</td>
+                    <td className="px-4 py-3 font-bold text-slate-950">{ticket.subject}</td>
+                    <td className="px-4 py-3 text-slate-500 max-w-xs truncate">{ticket.message}</td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                        ticket.status === 'open' 
+                          ? 'bg-amber-50 text-amber-700 border border-amber-200' 
+                          : 'bg-green-50 text-green-700 border border-green-200'
+                      }`}>
+                        {ticket.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-[10px] text-slate-400 font-mono">
+                      {new Date(ticket.created).toLocaleString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
     </div>

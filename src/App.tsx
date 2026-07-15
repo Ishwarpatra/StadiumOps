@@ -39,6 +39,7 @@ import {
   initialBottlenecks, 
   initialAIActionItems 
 } from './data';
+import { generateUUID } from './utils/uuid';
 
 type AppTab = 'initializing' | 'dashboard' | 'revenue' | 'staffing' | 'venue' | 'settings' | 'help';
 
@@ -49,7 +50,16 @@ export default function App() {
   const [isDeployModalOpen, setIsDeployModalOpen] = useState(false);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
 
-  // Simulation parameters in unified React state with localStorage persistence
+  // Safe localStorage helper to prevent QuotaExceededError silent crashes (Point 8)
+  const safeSetLocalStorage = (key: string, value: any) => {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch (e) {
+      console.error(`[STORAGE QUOTA OVERFLOW] LocalStorage quota exceeded while caching "${key}". Gracefully falling back to in-memory state.`, e);
+    }
+  };
+
+  // Simulation parameters in unified React state with localStorage persistence and API backend synchronization (Point 1 & 15)
   const [simulation, setSimulation] = useState<SimulationState>(() => {
     const saved = localStorage.getItem('stadium_ops_simulation');
     return saved ? JSON.parse(saved) : initialSimulation;
@@ -76,26 +86,115 @@ export default function App() {
     ];
   });
 
-  // Synchronize dynamic states with localStorage when updated
+  // Synchronize dynamic states with localStorage safely when updated (Quota-checked, Point 8)
   useEffect(() => {
-    localStorage.setItem('stadium_ops_simulation', JSON.stringify(simulation));
+    safeSetLocalStorage('stadium_ops_simulation', simulation);
   }, [simulation]);
 
   useEffect(() => {
-    localStorage.setItem('stadium_ops_hotspots', JSON.stringify(hotspots));
+    safeSetLocalStorage('stadium_ops_hotspots', hotspots);
   }, [hotspots]);
 
   useEffect(() => {
-    localStorage.setItem('stadium_ops_bottlenecks', JSON.stringify(bottlenecks));
+    safeSetLocalStorage('stadium_ops_bottlenecks', bottlenecks);
   }, [bottlenecks]);
 
   useEffect(() => {
-    localStorage.setItem('stadium_ops_aiActions', JSON.stringify(aiActions));
+    safeSetLocalStorage('stadium_ops_aiActions', aiActions);
   }, [aiActions]);
 
   useEffect(() => {
-    localStorage.setItem('stadium_ops_notifications', JSON.stringify(notifications));
+    safeSetLocalStorage('stadium_ops_notifications', notifications);
   }, [notifications]);
+
+  // Real-time backend API synchronization & polling system (Points 1, 2, 5, 10, 15)
+  useEffect(() => {
+    let active = true;
+
+    const syncWithBackend = async () => {
+      try {
+        // 1. Sync simulation parameters from server (Point 10)
+        const simRes = await fetch('/api/simulation');
+        if (!simRes.ok) throw new Error('Backend offline');
+        const simData = await simRes.json();
+        
+        if (active) {
+          setSimulation(prev => ({
+            ...prev,
+            ...simData,
+            // Keep dynamic local additions like isLive
+            isLive: prev.isLive
+          }));
+          setIsOnline(true);
+        }
+
+        // 2. Sync incidents & failure states (Point 5)
+        const incRes = await fetch('/api/incidents');
+        if (incRes.ok) {
+          const incData = await incRes.json();
+          if (active && Array.isArray(incData)) {
+            // Map backend incidents to dynamic hotspots and bottlenecks (Point 5)
+            const mappedHotspots: Hotspot[] = incData
+              .filter(inc => inc.type !== 'revenue')
+              .map(inc => ({
+                id: inc.id,
+                location: inc.location,
+                priority: inc.priority,
+                description: inc.description,
+                status: inc.status,
+                staffAssigned: inc.staffAssigned || 0,
+                type: inc.type || 'security'
+              }));
+            
+            const mappedBottlenecks: Bottleneck[] = incData
+              .filter(inc => inc.type === 'revenue')
+              .map(inc => ({
+                id: inc.id,
+                location: inc.location,
+                severity: inc.priority === 'critical' ? 'critical' : inc.priority === 'high' ? 'high' : 'medium',
+                description: inc.description,
+                delayMinutes: inc.status === 'resolved' ? 0 : inc.priority === 'critical' ? 15 : 8
+              }));
+
+            // Merge with local states to preserve initial items if they aren't duplicates
+            setHotspots(prev => {
+              const nonSync = prev.filter(p => !p.id.startsWith('inc_') && p.id !== '1' && p.id !== '2');
+              return [...mappedHotspots, ...nonSync];
+            });
+
+            setBottlenecks(prev => {
+              const nonSync = prev.filter(p => !p.id.startsWith('inc_') && p.id !== 'inc_default_1' && p.id !== 'inc_default_2');
+              return [...mappedBottlenecks, ...nonSync];
+            });
+          }
+        }
+      } catch (error) {
+        console.warn('[BACKEND OFFLINE] Falling back to offline client-side simulation state.', error);
+        if (active) {
+          setIsOnline(false);
+        }
+      }
+    };
+
+    // Initial sync
+    syncWithBackend();
+
+    // Setup 5-second interval short-polling (Point 15)
+    const intervalId = setInterval(syncWithBackend, 5000);
+
+    // Dynamic browser offline/online detection (Point 8)
+    const handleBrowserOnline = () => setIsOnline(true);
+    const handleBrowserOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleBrowserOnline);
+    window.addEventListener('offline', handleBrowserOffline);
+
+    return () => {
+      active = false;
+      clearInterval(intervalId);
+      window.removeEventListener('online', handleBrowserOnline);
+      window.removeEventListener('offline', handleBrowserOffline);
+    };
+  }, []);
 
   // Header functionality state hooks
   const [globalSearchQuery, setGlobalSearchQuery] = useState('');
@@ -105,6 +204,30 @@ export default function App() {
   const [showWifiPopover, setShowWifiPopover] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
+
+  // Toast System State
+  interface ToastItem {
+    id: string;
+    message: string;
+    type: 'success' | 'error' | 'warning' | 'info';
+    title?: string;
+  }
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+
+  const showToast = (message: string, type: 'success' | 'error' | 'warning' | 'info' = 'success', title?: string) => {
+    const id = generateUUID();
+    setToasts(prev => [...prev, { id, message, type, title }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 4000);
+  };
+
+  useEffect(() => {
+    (window as any).showToast = showToast;
+    return () => {
+      delete (window as any).showToast;
+    };
+  }, []);
 
   // Real-time dynamic ticking clock (UTC representation)
   useEffect(() => {
@@ -447,16 +570,16 @@ export default function App() {
                         { name: 'Help Center & Docs', tab: 'help' as const, icon: HelpCircle }
                       ].filter(t => t.name.toLowerCase().includes(q));
 
-                      // 2. Matches Hotspots
+                      // 2. Matches Hotspots (Safeguarded against undefined values)
                       const matchedHotspots = hotspots.filter(h => 
-                        h.location.toLowerCase().includes(q) ||
-                        h.description.toLowerCase().includes(q)
+                        ((h && h.location) || '').toLowerCase().includes(q) ||
+                        ((h && h.description) || '').toLowerCase().includes(q)
                       );
 
-                      // 3. Matches Bottlenecks
+                      // 3. Matches Bottlenecks (Safeguarded against undefined values)
                       const matchedBottlenecks = bottlenecks.filter(b => 
-                        b.location.toLowerCase().includes(q) || 
-                        b.description.toLowerCase().includes(q)
+                        ((b && b.location) || '').toLowerCase().includes(q) || 
+                        ((b && b.description) || '').toLowerCase().includes(q)
                       );
 
                       // 4. Matches System actions
@@ -780,7 +903,7 @@ export default function App() {
                             ...prev
                           ]);
                           if (newOnline) {
-                            alert("Syncing offline POS payment logs and turnstile ticket validations to centralized database servers... Complete!");
+                            showToast("Syncing offline POS payment logs and turnstile ticket validations to centralized database servers... Complete!", "success", "Network Synced");
                           }
                         }}
                         className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
@@ -1008,7 +1131,7 @@ export default function App() {
         )}
 
         {/* Scrollable Main Canvas */}
-        <main className="flex-grow flex-1 overflow-y-auto p-margin-mobile md:p-margin-desktop bg-[#F8F9FA]">
+        <main className="flex-grow flex-1 overflow-y-auto p-margin-mobile pb-24 md:p-margin-desktop md:pb-6 bg-[#F8F9FA]">
           <div className={`${currentTab === 'settings' ? 'max-w-[1600px]' : 'max-w-7xl'} mx-auto space-y-lg`}>
         
 
@@ -1096,43 +1219,47 @@ export default function App() {
 
             <div className="flex-grow overflow-y-auto space-y-3 pr-1">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Active Target Hotspots</h3>
-              {hotspots.map(h => (
-                <div key={h.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-slate-800">{h.name}</span>
-                      <span className="text-[10px] font-mono font-bold bg-slate-200/60 text-slate-600 px-1.5 py-0.5 rounded">
-                        {h.zone}
-                      </span>
+              {hotspots.map(h => {
+                const waitTime = h.priority === 'critical' ? 240 : h.priority === 'high' ? 180 : 90;
+                const queueCount = h.priority === 'critical' ? 95 : h.priority === 'high' ? 60 : 30;
+                return (
+                  <div key={h.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-slate-800">{h.location || 'Unknown Location'}</span>
+                        <span className="text-[10px] font-mono font-bold bg-slate-200/60 text-slate-600 px-1.5 py-0.5 rounded uppercase">
+                          {h.type || 'Security'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-400">
+                        <span>Wait: <span className="font-bold text-slate-600">{waitTime}s</span></span>
+                        <span>Queue: <span className="font-bold text-slate-600">{queueCount} fans</span></span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-400">
-                      <span>Wait: <span className="font-bold text-slate-600">{h.avgWaitTimeSeconds}s</span></span>
-                      <span>Queue: <span className="font-bold text-slate-600">{h.queueSize} fans</span></span>
-                    </div>
-                  </div>
 
-                  <div>
-                    {h.status === 'dispatched' ? (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-700 font-bold text-xs rounded-xl border border-amber-100">
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-                        Dispatched ({h.staffAssigned})
-                      </span>
-                    ) : h.status === 'resolved' ? (
-                      <span className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-50 text-emerald-700 font-bold text-xs rounded-xl border border-emerald-100">
-                        <ShieldCheck className="w-3.5 h-3.5" />
-                        Resolved
-                      </span>
-                    ) : (
-                      <button
-                        onClick={() => handleDeployStaffDirectly(h.id)}
-                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer"
-                      >
-                        Deploy Staff
-                      </button>
-                    )}
+                    <div>
+                      {h.status === 'dispatched' ? (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-700 font-bold text-xs rounded-xl border border-amber-100">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                          Dispatched ({h.staffAssigned})
+                        </span>
+                      ) : h.status === 'resolved' ? (
+                        <span className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-50 text-emerald-700 font-bold text-xs rounded-xl border border-emerald-100">
+                          <ShieldCheck className="w-3.5 h-3.5" />
+                          Resolved
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => handleDeployStaffDirectly(h.id)}
+                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer"
+                        >
+                          Deploy Staff
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
 
               <div className="pt-4 border-t border-slate-100">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">General Reinforcements</h3>
@@ -1165,6 +1292,93 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* ─── CLICK-AWAY BACKDROP OVERLAY ─── */}
+      {(showNotificationsDropdown || showActivityPopover || showWifiPopover || showProfileDropdown || showGlobalSearchResults) && (
+        <div 
+          className="fixed inset-0 z-20 bg-transparent" 
+          onClick={() => {
+            setShowNotificationsDropdown(false);
+            setShowActivityPopover(false);
+            setShowWifiPopover(false);
+            setShowProfileDropdown(false);
+            setShowGlobalSearchResults(false);
+          }}
+        />
+      )}
+
+      {/* ─── TOAST NOTIFICATIONS SYSTEM ─── */}
+      <div className="fixed bottom-20 md:bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none px-4 sm:px-0">
+        {toasts.map(toast => {
+          let bgClass = 'bg-slate-800 text-white';
+          if (toast.type === 'success') bgClass = 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/10';
+          if (toast.type === 'error') bgClass = 'bg-rose-600 text-white shadow-lg shadow-rose-900/10';
+          if (toast.type === 'warning') bgClass = 'bg-amber-500 text-slate-900 shadow-lg shadow-amber-900/10';
+          if (toast.type === 'info') bgClass = 'bg-blue-600 text-white shadow-lg shadow-blue-900/10';
+
+          return (
+            <div 
+              key={toast.id}
+              className={`p-4 rounded-xl border border-white/10 flex flex-col gap-1 transform transition-all duration-300 translate-y-0 opacity-100 pointer-events-auto ${bgClass}`}
+            >
+              {toast.title && <p className="font-bold text-[10px] tracking-wider uppercase opacity-90">{toast.title}</p>}
+              <p className="text-xs font-semibold leading-relaxed">{toast.message}</p>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ─── GLOBAL DEPLOY STAFF FAB ─── */}
+      <button
+        onClick={() => setIsDeployModalOpen(true)}
+        className="fixed bottom-20 md:bottom-8 right-6 md:right-8 z-40 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white p-4 rounded-full shadow-2xl transition-all flex items-center justify-center cursor-pointer group border border-blue-500/20 hover:shadow-blue-500/20 hover:shadow-xl"
+        title="Deploy Staff"
+        aria-label="Deploy Staff"
+      >
+        <Users className="w-5 h-5" />
+        <span className="max-w-0 overflow-hidden group-hover:max-w-xs group-hover:ml-2 transition-all duration-300 font-bold text-xs whitespace-nowrap">
+          Deploy Staff
+        </span>
+      </button>
+
+      {/* ─── MOBILE BOTTOM NAVIGATION BAR ─── */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-slate-200 shadow-[0_-4px_12px_rgba(0,0,0,0.03)] flex items-center justify-around px-2 z-40 select-none">
+        <button 
+          onClick={() => handleNavigate('dashboard')}
+          className={`flex flex-col items-center justify-center flex-1 py-1 transition-all ${currentTab === 'dashboard' ? 'text-blue-600 scale-105 font-bold' : 'text-slate-400'}`}
+        >
+          <LayoutDashboard className="w-5 h-5" />
+          <span className="text-[10px] tracking-tight mt-0.5">Dashboard</span>
+        </button>
+        <button 
+          onClick={() => handleNavigate('revenue')}
+          className={`flex flex-col items-center justify-center flex-1 py-1 transition-all ${currentTab === 'revenue' ? 'text-blue-600 scale-105 font-bold' : 'text-slate-400'}`}
+        >
+          <DollarSign className="w-5 h-5" />
+          <span className="text-[10px] tracking-tight mt-0.5">Revenue</span>
+        </button>
+        <button 
+          onClick={() => handleNavigate('staffing')}
+          className={`flex flex-col items-center justify-center flex-1 py-1 transition-all ${currentTab === 'staffing' ? 'text-blue-600 scale-105 font-bold' : 'text-slate-400'}`}
+        >
+          <Users className="w-5 h-5" />
+          <span className="text-[10px] tracking-tight mt-0.5">Staffing</span>
+        </button>
+        <button 
+          onClick={() => handleNavigate('venue')}
+          className={`flex flex-col items-center justify-center flex-1 py-1 transition-all ${currentTab === 'venue' ? 'text-blue-600 scale-105 font-bold' : 'text-slate-400'}`}
+        >
+          <MapPin className="w-5 h-5" />
+          <span className="text-[10px] tracking-tight mt-0.5">Venue</span>
+        </button>
+        <button 
+          onClick={() => handleNavigate('settings')}
+          className={`flex flex-col items-center justify-center flex-1 py-1 transition-all ${currentTab === 'settings' ? 'text-blue-600 scale-105 font-bold' : 'text-slate-400'}`}
+        >
+          <Settings className="w-5 h-5" />
+          <span className="text-[10px] tracking-tight mt-0.5">Settings</span>
+        </button>
+      </nav>
 
     </div>
   );

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { SimulationState, FanSentimentLog } from '../types';
 import { initialFanLogs } from '../data';
+import { generateUUID } from '../utils/uuid';
 
 interface VenueScreenProps {
   simulation: SimulationState;
@@ -41,7 +42,7 @@ export default function VenueScreen({ simulation, setSimulation }: VenueScreenPr
     }));
 
     const newLog: FanSentimentLog = {
-      id: Math.random().toString(),
+      id: generateUUID(),
       time: 'Just Now',
       user: 'Stadium Broadcast',
       rating: 5,

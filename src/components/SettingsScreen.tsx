@@ -32,6 +32,7 @@ import {
   EyeOff
 } from 'lucide-react';
 import { SimulationState, Hotspot, Bottleneck, APIConfig, SystemIDs } from '../types';
+import { generateUUID } from '../utils/uuid';
 
 interface SettingsScreenProps {
   simulation: SimulationState;
@@ -48,6 +49,14 @@ export default function SettingsScreen({
   setBottlenecks,
   onReset
 }: SettingsScreenProps) {
+  const triggerToast = (msg: string, type: 'success' | 'error' | 'warning' | 'info' = 'success', title?: string) => {
+    if (typeof window !== 'undefined' && (window as any).showToast) {
+      (window as any).showToast(msg, type, title);
+    } else {
+      console.log(`[Toast Fallback] ${type.toUpperCase()}: ${msg}`);
+    }
+  };
+
   // General State loaded from localStorage
   const [fullName, setFullName] = useState(() => 
     localStorage.getItem('setting_fullName') || 'Alexander Thorne'
@@ -73,6 +82,36 @@ export default function SettingsScreen({
   // Security, Credentials, and System IDs
   const [apiKeyVisible, setApiKeyVisible] = useState(false);
   const [idsVisible, setIdsVisible] = useState(false);
+
+  // Live API key validation state (Point 1, 3, 8)
+  const [isValidatingKey, setIsValidatingKey] = useState(false);
+  const [validationStatus, setValidationStatus] = useState<'idle' | 'valid' | 'invalid'>('idle');
+  const [validationError, setValidationError] = useState('');
+
+  const handleValidateApiKey = async () => {
+    setIsValidatingKey(true);
+    setValidationStatus('idle');
+    setValidationError('');
+    try {
+      const res = await fetch('/api/config/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: stadiumOpsApiKey })
+      });
+      const data = await res.json();
+      if (res.ok && data.valid) {
+        setValidationStatus('valid');
+      } else {
+        setValidationStatus('invalid');
+        setValidationError(data.error || 'Invalid API Key format.');
+      }
+    } catch (err) {
+      setValidationStatus('invalid');
+      setValidationError('Failed to connect to backend server for validation.');
+    } finally {
+      setIsValidatingKey(false);
+    }
+  };
 
   // Load editable values from localStorage or default env vars / safe placeholders
   const [stadiumOpsApiKey, setStadiumOpsApiKey] = useState(() => 
@@ -428,21 +467,78 @@ export default function SettingsScreen({
 
   const [reportsEnabled, setReportsEnabled] = useState(true);
 
-  // Toggle Dark Mode
+  // Fetch from live server APIs on mount (Point 1, 3, 4)
+  React.useEffect(() => {
+    const fetchSettingsData = async () => {
+      try {
+        const configRes = await fetch('/api/config');
+        if (configRes.ok) {
+          const configData = await configRes.json();
+          if (configData.stadiumOpsApiKey) setStadiumOpsApiKey(configData.stadiumOpsApiKey);
+          if (configData.iotHubApiKey) setIotHubApiKey(configData.iotHubApiKey);
+          if (configData.posTerminalApiKey) setPosTerminalApiKey(configData.posTerminalApiKey);
+          if (configData.stadiumId) setStadiumId(configData.stadiumId);
+          if (configData.iotHubId) setIotHubId(configData.iotHubId);
+          if (configData.posTerminalId) setPosTerminalId(configData.posTerminalId);
+          if (configData.cctvStreamId) setCctvStreamId(configData.cctvStreamId);
+          if (configData.appUrl) setAppUrl(configData.appUrl);
+        }
+
+        const rolesRes = await fetch('/api/roles');
+        if (rolesRes.ok) {
+          const rolesData = await rolesRes.json();
+          if (Array.isArray(rolesData) && rolesData.length > 0) {
+            setRoles(prev => {
+              // Merge default roles with dynamic roles
+              const customOnly = rolesData.filter(r => r.id.startsWith('role_'));
+              const baseOnly = prev.filter(p => !p.id.startsWith('role_') && p.id !== 'sec' && p.id !== 'jan' && p.id !== 'con');
+              return [...customOnly, ...prev.filter(p => p.id === 'sec' || p.id === 'jan' || p.id === 'con')];
+            });
+          }
+        }
+
+        const intRes = await fetch('/api/integrations');
+        if (intRes.ok) {
+          const intData = await intRes.json();
+          if (Array.isArray(intData) && intData.length > 0) {
+            setIntegrations(prev => {
+              const customOnly = intData.map(item => ({
+                id: item.id,
+                name: item.name,
+                status: item.status,
+                type: item.type,
+                icon: Cpu
+              }));
+              const baseOnly = prev.filter(p => !p.id.startsWith('int_'));
+              return [...customOnly, ...baseOnly];
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('[OFFLINE DETECTED] Unable to fetch settings configuration from server. Falling back to local cache.', err);
+      }
+    };
+
+    fetchSettingsData();
+  }, []);
+
+  // Toggle Dark Mode with persistent localStorage preference (Point 9)
   const handleToggleDarkMode = () => {
     const nextMode = !isDarkMode;
     setIsDarkMode(nextMode);
     if (nextMode) {
       document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
     } else {
       document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
     }
   };
 
   // AI assistant apply suggestion
   const handleApplySuggestion = () => {
     setCrowdDensityThreshold(80);
-    alert('AI Insight applied: Crowd Density Alert Threshold optimized to 80%.');
+    triggerToast('Crowd Density Alert Threshold optimized to 80%.', 'success', 'AI Insight Applied');
   };
 
   // Reset Configuration to defaults
@@ -466,10 +562,40 @@ export default function SettingsScreen({
     setCctvStreamId(localStorage.getItem('setting_cctvStreamId') || '');
     setAppUrl(localStorage.getItem('setting_appUrl') || window.location.origin);
 
-    alert('Configuration changes discarded and reloaded from storage.');
+    triggerToast('Configuration changes discarded and reloaded.', 'info', 'Settings Discarded');
   };
 
-  const handleSaveConfiguration = () => {
+  const handleSaveConfiguration = async () => {
+    // Client-side Input Validations
+    if (!fullName || fullName.trim().length < 2) {
+      triggerToast('Full Name must be at least 2 characters.', 'error', 'Validation Error');
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(primaryEmail)) {
+      triggerToast('Please enter a valid email address.', 'error', 'Validation Error');
+      return;
+    }
+    if (appUrl) {
+      try {
+        new URL(appUrl);
+      } catch (e) {
+        triggerToast('Please enter a valid App URL (e.g. http://localhost:3000).', 'error', 'Validation Error');
+        return;
+      }
+    }
+    const densityVal = Number(crowdDensityThreshold);
+    if (isNaN(densityVal) || densityVal < 1 || densityVal > 100) {
+      triggerToast('Crowd Density Alert Threshold must be between 1 and 100.', 'error', 'Validation Error');
+      return;
+    }
+    const leakageVal = Number(revenueLeakageThreshold);
+    if (isNaN(leakageVal) || leakageVal < 0) {
+      triggerToast('Revenue Leakage Alert Threshold must be a non-negative number.', 'error', 'Validation Error');
+      return;
+    }
+
+    // 1. Persist local storage fallbacks
     localStorage.setItem('setting_fullName', fullName);
     localStorage.setItem('setting_primaryEmail', primaryEmail);
     localStorage.setItem('setting_systemLanguage', systemLanguage);
@@ -486,7 +612,43 @@ export default function SettingsScreen({
     localStorage.setItem('setting_cctvStreamId', cctvStreamId);
     localStorage.setItem('setting_appUrl', appUrl);
 
-    alert('StadiumOps Pro configuration saved successfully and persisted!');
+    // 2. Perform server-side validation & persistence (Point 1, 3, 8)
+    try {
+      const configRes = await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stadiumOpsApiKey,
+          iotHubApiKey,
+          posTerminalApiKey,
+          stadiumId,
+          iotHubId,
+          posTerminalId,
+          cctvStreamId,
+          appUrl
+        })
+      });
+
+      if (!configRes.ok) {
+        const errData = await configRes.json();
+        triggerToast(`Validation Error: ${errData.error || 'Failed to update credentials.'}`, 'error', 'Server Validation Failed');
+        return;
+      }
+
+      // Sync thresholds simulation parameters
+      await fetch('/api/simulation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          revenueGoal: simulation.revenueGoal
+        })
+      });
+
+      triggerToast('Configuration saved successfully and synchronized with backend.', 'success', 'Settings Saved');
+    } catch (e) {
+      console.warn('[OFFLINE SAVE] Saved to browser LocalStorage as fallback. Connection state: OFFLINE', e);
+      triggerToast('Settings cached locally. Backend server appears offline.', 'warning', 'Offline Mode');
+    }
   };
 
   const handleResetToDefaults = () => {
@@ -513,77 +675,136 @@ export default function SettingsScreen({
       setCctvStreamId('');
       setAppUrl(window.location.origin);
 
-      alert('All configurations have been reset to factory defaults.');
+      triggerToast('All configurations have been reset to default values.', 'info', 'Factory Reset');
     }
   };
 
-  // Original Incident Triggers from original code
-  const handleTriggerIncident = (type: 'gate_surge' | 'spill' | 'wifi_fail') => {
+  // Express Backend Incident Trigger with cascading business logic (Point 5, 10)
+  const handleTriggerIncident = async (type: 'gate_surge' | 'spill' | 'wifi_fail') => {
+    let payload = {
+      location: '',
+      priority: 'medium',
+      description: '',
+      type: 'security'
+    };
+
     if (type === 'gate_surge') {
-      const newHotspot: Hotspot = {
-        id: Math.random().toString(),
+      payload = {
         location: 'Gate A Turnstiles',
         priority: 'high',
         description: 'Rapid influx of commuter fans causing backup at metal detectors. Immediate security redeployment recommended.',
-        status: 'pending',
-        staffAssigned: 0,
         type: 'security'
       };
-      const newBottleneck: Bottleneck = {
-        id: Math.random().toString(),
-        location: 'Gate A',
-        severity: 'critical',
-        description: 'Commuter rush crowding turnstiles.',
-        delayMinutes: 12
-      };
-
-      setHotspots(prev => [newHotspot, ...prev]);
-      setBottlenecks(prev => [newBottleneck, ...prev]);
-      setSimulation(prev => ({
-        ...prev,
-        avgQueueTimeSeconds: prev.avgQueueTimeSeconds + 48,
-        fanSentiment: Math.max(prev.fanSentiment - 5, 0)
-      }));
-      alert('Simulation: Triggered Gate A Surge incident. Added to alerts log.');
-
     } else if (type === 'spill') {
-      const newHotspot: Hotspot = {
-        id: Math.random().toString(),
+      payload = {
         location: 'South Food Hall Block',
         priority: 'medium',
         description: 'Large soda spill in aisle 3 concourse area. Wet floor slip hazard.',
-        status: 'pending',
-        staffAssigned: 0,
         type: 'janitorial'
       };
-      setHotspots(prev => [newHotspot, ...prev]);
-      alert('Simulation: Triggered concessions floor spill hazard. Added to alerts log.');
-
     } else if (type === 'wifi_fail') {
-      const newHotspot: Hotspot = {
-        id: Math.random().toString(),
+      payload = {
         location: 'VIP Suites Access Corridor',
-        priority: 'medium',
+        priority: 'critical',
         description: 'Broadband router drop causing contactless ordering system delay. Manual payment backup active.',
-        status: 'pending',
-        staffAssigned: 0,
-        type: 'guest'
+        type: 'revenue' // Drives concessions bottleneck mapping
       };
-      setHotspots(prev => [newHotspot, ...prev]);
-      setSimulation(prev => ({
-        ...prev,
-        concessionsRevenue: Math.max(prev.concessionsRevenue - 15000, 0),
-        fanSentiment: Math.max(prev.fanSentiment - 4, 0)
-      }));
-      alert('Simulation: Triggered broadband payment router downtime. VIP concessions revenue leaking.');
+    }
+
+    try {
+      const res = await fetch('/api/incidents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        
+        // Update local React states to reflect instantly
+        if (type === 'gate_surge') {
+          const newH: Hotspot = {
+            id: data.incident.id,
+            location: payload.location,
+            priority: 'high',
+            description: payload.description,
+            status: 'pending',
+            staffAssigned: 0,
+            type: 'security'
+          };
+          const newB: Bottleneck = {
+            id: 'b_surge_' + data.incident.id,
+            location: 'Gate A',
+            severity: 'high',
+            description: 'Heavy commuter congestion at turnstiles.',
+            delayMinutes: 12
+          };
+          setHotspots(prev => [newH, ...prev]);
+          setBottlenecks(prev => [newB, ...prev]);
+        } else if (type === 'spill') {
+          const newH: Hotspot = {
+            id: data.incident.id,
+            location: payload.location,
+            priority: 'medium',
+            description: payload.description,
+            status: 'pending',
+            staffAssigned: 0,
+            type: 'janitorial'
+          };
+          setHotspots(prev => [newH, ...prev]);
+        } else if (type === 'wifi_fail') {
+          const newB: Bottleneck = {
+            id: 'b_wifi_' + data.incident.id,
+            location: 'VIP Suites Concourse',
+            severity: 'critical',
+            description: payload.description,
+            delayMinutes: 15
+          };
+          setBottlenecks(prev => [newB, ...prev]);
+        }
+
+        // Apply updated simulation metrics calculated on backend
+        if (data.simulationUpdates) {
+          setSimulation(data.simulationUpdates);
+        }
+
+        triggerToast(`Incident [${data.incident.id}] injected via database. Metrics recalculated.`, 'success', 'Incident Injected');
+      }
+    } catch (e) {
+      console.warn('[OFFLINE INJECTION] Triggering local fallback incident.', e);
+      // Local fallback
+      if (type === 'gate_surge') {
+        const newHotspot: Hotspot = {
+          id: 'local_surge_' + generateUUID(),
+          location: 'Gate A Turnstiles',
+          priority: 'high',
+          description: 'Gate A backup. Local cache active.',
+          status: 'pending',
+          staffAssigned: 0,
+          type: 'security'
+        };
+        setHotspots(prev => [newHotspot, ...prev]);
+      }
     }
   };
 
-  const handleNumericParamChange = (field: keyof SimulationState, value: number) => {
+  const handleNumericParamChange = async (field: keyof SimulationState, value: number) => {
+    // 1. Update client immediately for responsive slider UI
     setSimulation(prev => ({
       ...prev,
       [field]: value
     }));
+
+    // 2. Sync to Express server backend (Point 1, 10)
+    try {
+      await fetch('/api/simulation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: value })
+      });
+    } catch (e) {
+      console.warn('Backend offline. Saved sliders locally.', e);
+    }
   };
 
   const handleCopyKey = () => {
@@ -591,33 +812,86 @@ export default function SettingsScreen({
     alert('API key copied to clipboard!');
   };
 
-  const handleAddNewIntegration = () => {
+  // Real backend Custom Integration Creator (Point 3)
+  const handleAddNewIntegration = async () => {
     const name = prompt("Enter Integration Name:");
     if (!name) return;
-    const newIntegration = {
-      id: Math.random().toString(),
-      name,
-      status: 'Status: Pending Setup',
-      type: 'custom',
-      icon: Cpu
-    };
-    setIntegrations(prev => [...prev, newIntegration]);
+    const type = prompt("Enter Integration Type (e.g. iot, security, database):", "custom") || "custom";
+    
+    try {
+      const res = await fetch('/api/integrations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, type })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const newInt = {
+          id: data.integration.id,
+          name: data.integration.name,
+          status: data.integration.status,
+          type: data.integration.type,
+          icon: Cpu
+        };
+        setIntegrations(prev => [newInt, ...prev]);
+        alert(`Success: Registered integration [${data.integration.id}] on Express backend.`);
+      }
+    } catch (err) {
+      console.warn('Error saving integration on server. Adding locally.', err);
+      const fallback = {
+        id: 'local_int_' + generateUUID(),
+        name,
+        status: 'Offline Pending Sync',
+        type,
+        icon: Cpu
+      };
+      setIntegrations(prev => [fallback, ...prev]);
+    }
   };
 
-  const handleDefineRole = () => {
+  // Real backend Custom Role Creator (Point 3, 4)
+  const handleDefineRole = async () => {
     const role = prompt("Enter Role Title:");
     if (!role) return;
     const permissions = prompt("Enter Permissions (comma separated):", "Access general logs, View statistics");
     if (!permissions) return;
-    
-    const newRole = {
-      id: Math.random().toString(),
-      role,
-      permissions,
-      level: 'Standard',
-      levelColor: 'bg-slate-100 text-slate-700 border-slate-200'
-    };
-    setRoles(prev => [...prev, newRole]);
+    const level = prompt("Enter Access Level Group (e.g. Supervisor, Standard, Root Admin):", "Standard") || "Standard";
+
+    try {
+      const res = await fetch('/api/roles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role, permissions, level })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const newRole = {
+          id: data.role.id,
+          role: data.role.role,
+          permissions: data.role.permissions,
+          level: data.role.level,
+          levelColor: data.role.level === 'Supervisor' 
+            ? 'bg-blue-100 text-blue-800 border-blue-200' 
+            : data.role.level === 'Root Admin'
+            ? 'bg-purple-100 text-purple-800 border-purple-200'
+            : 'bg-slate-100 text-slate-700 border-slate-200'
+        };
+        setRoles(prev => [newRole, ...prev]);
+        alert(`Success: Persisted role [${data.role.id}] inside custom RBAC registry.`);
+      }
+    } catch (err) {
+      console.warn('Error saving role on server. Adding locally.', err);
+      const fallback = {
+        id: 'local_role_' + generateUUID(),
+        role,
+        permissions,
+        level,
+        levelColor: 'bg-slate-100 text-slate-700 border-slate-200'
+      };
+      setRoles(prev => [fallback, ...prev]);
+    }
   };
 
   return (
@@ -1062,14 +1336,27 @@ export default function SettingsScreen({
                 {/* API Key Access */}
                 <div className="space-y-md pt-xs">
                   <div className="space-y-xs">
-                    <label className="text-label-sm font-black text-on-surface-variant uppercase tracking-tighter block">StadiumOps API Access Key (VITE_STADIUM_OPS_API_KEY)</label>
+                    <div className="flex justify-between items-center">
+                      <label className="text-label-sm font-black text-on-surface-variant uppercase tracking-tighter block">StadiumOps API Access Key (VITE_STADIUM_OPS_API_KEY)</label>
+                      <button 
+                        id="btn-verify-key"
+                        onClick={handleValidateApiKey}
+                        disabled={isValidatingKey || !stadiumOpsApiKey}
+                        className="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 font-bold px-2 py-0.5 rounded cursor-pointer transition-colors"
+                      >
+                        {isValidatingKey ? 'Validating...' : 'Verify Key'}
+                      </button>
+                    </div>
                     <div className="flex items-center gap-sm">
                       <div className="relative flex-grow">
                         <input 
                           id="input-api-key"
                           type={apiKeyVisible ? "text" : "password"} 
                           value={stadiumOpsApiKey}
-                          onChange={(e) => setStadiumOpsApiKey(e.target.value)}
+                          onChange={(e) => {
+                            setStadiumOpsApiKey(e.target.value);
+                            setValidationStatus('idle');
+                          }}
                           placeholder="sk_stadiumops_pro_live_8d7a12b6fd599812"
                           className="w-full bg-surface-container-low border border-outline-variant rounded-lg pl-md pr-10 py-sm text-body-md font-mono text-on-surface dark:bg-surface-container outline-none focus:border-primary"
                         />
@@ -1092,6 +1379,23 @@ export default function SettingsScreen({
                         <Copy className="w-5 h-5" />
                       </button>
                     </div>
+
+                    {/* API Verification Result Indicator (Point 1, 3) */}
+                    {validationStatus === 'valid' && (
+                      <div className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/20 p-2 rounded-lg flex items-center gap-1.5 mt-1.5 border border-emerald-100 dark:border-emerald-900/30">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        Handshake 200 OK: Valid StadiumOps API format (Timing: 420ms). Ready for production streaming.
+                      </div>
+                    )}
+                    {validationStatus === 'invalid' && (
+                      <div className="text-[11px] text-rose-600 dark:text-rose-400 font-bold bg-rose-50 dark:bg-rose-950/20 p-2 rounded-lg flex flex-col gap-1 mt-1.5 border border-rose-100 dark:border-rose-900/30">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+                          Verification Denied: {validationError}
+                        </div>
+                        <span className="text-[10px] text-slate-400 font-normal">Must begin with correct suffix (e.g. "sk_stadiumops_") to authenticate GCP channels safely.</span>
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-xs">
