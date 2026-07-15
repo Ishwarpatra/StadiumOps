@@ -2,85 +2,36 @@
 
 ## 1. Introduction
 
-This document outlines the phased approach for the development of the Smart Stadium Digital Assistant. Breaking the project into distinct phases allows for structured development, easier management, and iterative delivery of functionalities. Each phase will focus on a specific set of features, building upon the previous one.
+This document outlines the phased roadmap for **StadiumOps Pro - Smart Stadium Operations & Revenue Monitor Hub**. This approach breaks down development from initial foundation setup to real-time interactive simulations and GCP diagnostics testing.
 
-## 2. Project Phases
+---
 
-### Phase 1: Foundation & Core Services
+## 2. Project Milestone Phases
 
-**Goal:** Establish the foundational infrastructure and implement core backend services for data ingestion and basic operational functionalities.
+### Phase 1: Foundation & Layout Configuration
+**Goal:** Establish a modular, type-safe React 19 application layout with clean responsive routing and full state management.
+- Set up high-performance Vite web host configuration.
+- Integrate full tailwind styling rules with custom visual cards.
+- Establish core type definitions inside `/src/types.ts` for simulation variables, API configurations, and system identifiers.
 
-**Key Activities:**
-*   Set up cloud infrastructure (GCP/AWS, Kubernetes cluster).
-*   Implement data ingestion pipelines for IoT sensors, POS, and ticketing systems.
-*   Develop core backend APIs for user authentication and basic data management.
-*   Set up initial database schemas (PostgreSQL, MongoDB).
-*   Implement basic monitoring and logging.
+### Phase 2: Live Ingestion & Simulations
+**Goal:** Implement robust, high-frequency simulation engines to model real-world stadium telemetry.
+- Build turnstile ticket counters and concession sales simulators.
+- Integrate computer-vision concessions monitors and active crowd bottleneck gauges.
+- Implement adaptive staffing tables and dispatch control interfaces.
 
-**Deliverables:**
-*   Deployed cloud infrastructure.
-*   Functional data ingestion services.
-*   Basic user authentication API.
-*   Initial database setup.
+### Phase 3: Interactive Incident Control & Logs
+**Goal:** Empower operators with active feedback systems and scenario injectors.
+- Build the "Incident Injector" allowing manual simulation of concourse spillages, turnstile offline alerts, and POS failures.
+- Implement dynamic scrolling event logs with custom category badges (Alert, Warning, Success).
 
-### Phase 2: Revenue & Cost Optimization Features
+### Phase 4: GCP Web Services Diagnostics Hub
+**Goal:** Integrate live cloud service mappings, CLI references, and diagnostic console panels.
+- Build the interactive **GCP Web Services Architecture Panel** covering 15+ Google Cloud endpoints.
+- Integrate a live console runner compiling CLI configurations and pings with simulated execution latencies.
 
-**Goal:** Implement features aimed at reducing operational costs and maximizing revenue.
-
-**Key Activities:**
-*   Develop Computer-Vision Concessions module (AI/ML model integration).
-*   Implement Automated Ticketing & Dynamic Pricing system.
-*   Integrate Biometric Access Control (if applicable, or digital ticketing gates).
-*   Develop backend services to support these features.
-
-**Deliverables:**
-*   Working Computer-Vision Concessions prototype.
-*   Dynamic pricing engine.
-*   Biometric/digital access control integration.
-
-### Phase 3: Venue Monetization & Fan Engagement
-
-**Goal:** Develop features to monetize the venue year-round and enhance in-stadium fan spending and engagement.
-
-**Key Activities:**
-*   Develop Digital Twin Technology for virtual venue tours and booking.
-*   Integrate Smart Building IoT for climate, lighting, and water management.
-*   Implement Mobile Ordering & In-Seat Delivery system.
-*   Develop Augmented Reality (AR) & Gamification features for the fan app.
-
-**Deliverables:**
-*   Digital Twin platform.
-*   Smart Building IoT integration.
-*   Functional mobile ordering system.
-*   AR/Gamification features in fan app.
-
-### Phase 4: Operational Efficiency & Analytics
-
-**Goal:** Implement advanced operational efficiency features and predictive analytics.
-
-**Key Activities:**
-*   Develop Predictive Operations Software using AI-powered crowd analytics.
-*   Integrate real-time data from various sources for predictive modeling.
-*   Develop dashboards for stadium management and operators.
-*   Refine and optimize existing features based on performance data.
-
-**Deliverables:**
-*   Predictive operations dashboard.
-*   Enhanced operational analytics.
-*   Performance reports and optimizations.
-
-### Phase 5: Testing, Deployment & Iteration
-
-**Goal:** Conduct comprehensive testing, deploy the solution, and establish an iterative feedback loop for continuous improvement.
-
-**Key Activities:**
-*   Perform extensive unit, integration, and end-to-end testing.
-*   Conduct security audits and penetration testing.
-*   Deploy the solution to production environment.
-*   Gather user feedback and plan for future iterations.
-*   Establish CI/CD pipelines for continuous updates.
-
-**Deliverables:**
-*   Fully tested and deployed Smart Stadium Digital Assistant.
-*   User feedback reports.
-*   Post-launch monitoring and support plan.
+### Phase 5: Security Auditing & Deployment
+**Goal:** Harden variables, verify type safety, and deploy standalone builds.
+- Refactor sensitive keys into structured configurations and separate them from client code.
+- Implement toggles to expose/hide critical system-level UUIDs.
+- Deploy a standalone compiled serverless instance onto **Google Cloud Run**.

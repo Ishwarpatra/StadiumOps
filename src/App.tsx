@@ -49,17 +49,53 @@ export default function App() {
   const [isDeployModalOpen, setIsDeployModalOpen] = useState(false);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
 
-  // Simulation parameters in unified React state
-  const [simulation, setSimulation] = useState<SimulationState>(initialSimulation);
-  const [hotspots, setHotspots] = useState<Hotspot[]>(initialHotspots);
-  const [bottlenecks, setBottlenecks] = useState<Bottleneck[]>(initialBottlenecks);
-  const [aiActions, setAiActions] = useState<AIActionItem[]>(initialAIActionItems);
+  // Simulation parameters in unified React state with localStorage persistence
+  const [simulation, setSimulation] = useState<SimulationState>(() => {
+    const saved = localStorage.getItem('stadium_ops_simulation');
+    return saved ? JSON.parse(saved) : initialSimulation;
+  });
+  const [hotspots, setHotspots] = useState<Hotspot[]>(() => {
+    const saved = localStorage.getItem('stadium_ops_hotspots');
+    return saved ? JSON.parse(saved) : initialHotspots;
+  });
+  const [bottlenecks, setBottlenecks] = useState<Bottleneck[]>(() => {
+    const saved = localStorage.getItem('stadium_ops_bottlenecks');
+    return saved ? JSON.parse(saved) : initialBottlenecks;
+  });
+  const [aiActions, setAiActions] = useState<AIActionItem[]>(() => {
+    const saved = localStorage.getItem('stadium_ops_aiActions');
+    return saved ? JSON.parse(saved) : initialAIActionItems;
+  });
 
   // Dynamic system-level notifications
-  const [notifications, setNotifications] = useState<string[]>([
-    'System synced: Loaded 4 default hotspots.',
-    'VIP Concourse Alpha ordering bottleneck detected.'
-  ]);
+  const [notifications, setNotifications] = useState<string[]>(() => {
+    const saved = localStorage.getItem('stadium_ops_notifications');
+    return saved ? JSON.parse(saved) : [
+      'System synced: Loaded 4 default hotspots.',
+      'VIP Concourse Alpha ordering bottleneck detected.'
+    ];
+  });
+
+  // Synchronize dynamic states with localStorage when updated
+  useEffect(() => {
+    localStorage.setItem('stadium_ops_simulation', JSON.stringify(simulation));
+  }, [simulation]);
+
+  useEffect(() => {
+    localStorage.setItem('stadium_ops_hotspots', JSON.stringify(hotspots));
+  }, [hotspots]);
+
+  useEffect(() => {
+    localStorage.setItem('stadium_ops_bottlenecks', JSON.stringify(bottlenecks));
+  }, [bottlenecks]);
+
+  useEffect(() => {
+    localStorage.setItem('stadium_ops_aiActions', JSON.stringify(aiActions));
+  }, [aiActions]);
+
+  useEffect(() => {
+    localStorage.setItem('stadium_ops_notifications', JSON.stringify(notifications));
+  }, [notifications]);
 
   // Header functionality state hooks
   const [globalSearchQuery, setGlobalSearchQuery] = useState('');
@@ -84,6 +120,12 @@ export default function App() {
 
   // Reset helper
   const handleResetTelemetry = () => {
+    localStorage.removeItem('stadium_ops_simulation');
+    localStorage.removeItem('stadium_ops_hotspots');
+    localStorage.removeItem('stadium_ops_bottlenecks');
+    localStorage.removeItem('stadium_ops_aiActions');
+    localStorage.removeItem('stadium_ops_notifications');
+
     setSimulation(initialSimulation);
     setHotspots(initialHotspots);
     setBottlenecks(initialBottlenecks);
@@ -126,7 +168,7 @@ export default function App() {
     const targetH = hotspots.find(h => h.id === hotspotId);
     if (targetH) {
       setNotifications(prev => [
-        `Direct Dispatch: Assigned 2 reinforcements to ${targetH.name}.`,
+        `Direct Dispatch: Assigned 2 reinforcements to ${targetH.location}.`,
         ...prev
       ]);
     }
@@ -156,7 +198,7 @@ export default function App() {
       } else if (waitTime > 200) {
         advice = `Avg queue wait time is critical (${waitTime}s). Recommend adjusting concessions pricing or adding staff.`;
       } else {
-        advice = `All operations normal. Concessions revenue is at $${simulation.concessionRevenue.toLocaleString()} with average queue times optimized at ${waitTime}s.`;
+        advice = `All operations normal. Concessions revenue is at $${simulation.concessionsRevenue.toLocaleString()} with average queue times optimized at ${waitTime}s.`;
       }
       setDiagnosticsResult(advice);
     }, 600);
@@ -407,13 +449,13 @@ export default function App() {
 
                       // 2. Matches Hotspots
                       const matchedHotspots = hotspots.filter(h => 
-                        h.name.toLowerCase().includes(q) || 
-                        h.location.toLowerCase().includes(q)
+                        h.location.toLowerCase().includes(q) ||
+                        h.description.toLowerCase().includes(q)
                       );
 
                       // 3. Matches Bottlenecks
                       const matchedBottlenecks = bottlenecks.filter(b => 
-                        b.name.toLowerCase().includes(q) || 
+                        b.location.toLowerCase().includes(q) || 
                         b.description.toLowerCase().includes(q)
                       );
 
@@ -471,8 +513,8 @@ export default function App() {
                                   >
                                     <MapPin className="w-4 h-4 text-amber-500" />
                                     <div>
-                                      <span>{h.name}</span>
-                                      <span className="text-[10px] text-slate-400 block">{h.location} • Queue: {h.queueLength} people</span>
+                                      <span>{h.location}</span>
+                                      <span className="text-[10px] text-slate-400 block">{h.description} • Priority: {h.priority.toUpperCase()}</span>
                                     </div>
                                   </button>
                                   <button
@@ -504,8 +546,8 @@ export default function App() {
                                 >
                                   <DollarSign className="w-4 h-4 text-emerald-500" />
                                   <div>
-                                    <span>{b.name}</span>
-                                    <span className="text-[10px] text-slate-400 block">{b.description} • Wait Time: {b.waitTimeSeconds}s</span>
+                                    <span>{b.location}</span>
+                                    <span className="text-[10px] text-slate-400 block">{b.description} • Wait Time: {b.delayMinutes} mins</span>
                                   </div>
                                 </button>
                               ))}
@@ -556,6 +598,7 @@ export default function App() {
                   setShowProfileDropdown(false);
                 }}
                 className="p-sm text-on-surface-variant hover:bg-surface-container-high rounded-full transition-colors relative cursor-pointer block"
+                aria-label="Toggle notifications menu"
               >
                 <BellRing className="w-5 h-5" />
                 {notifications.length > 0 && (
@@ -617,6 +660,7 @@ export default function App() {
                   setShowProfileDropdown(false);
                 }}
                 className="p-sm text-on-surface-variant hover:bg-surface-container-high rounded-full transition-colors cursor-pointer block"
+                aria-label="Toggle metrics auditor popover"
               >
                 <Activity className="w-5 h-5" />
               </button>
@@ -678,7 +722,7 @@ export default function App() {
                       onClick={() => {
                         alert(`--- LIVE STADIUM DIAGNOSTICS REPORT ---\n` +
                               `• Match Status: Active Live Event\n` +
-                              `• Total Concessions Revenue: $${simulation.concessionRevenue.toLocaleString()}\n` +
+                              `• Total Concessions Revenue: $${simulation.concessionsRevenue.toLocaleString()}\n` +
                               `• Fan Satisfaction Sentiment: ${simulation.fanSentiment}%\n` +
                               `• Active Bottlenecks: ${bottlenecks.length}\n` +
                               `• Active Hotspots: ${hotspots.length}\n` +
@@ -704,6 +748,7 @@ export default function App() {
                 className={`p-sm rounded-full transition-colors cursor-pointer block ${
                   isOnline ? 'text-on-surface-variant hover:bg-surface-container-high' : 'text-rose-600 hover:bg-rose-50 bg-rose-50 animate-pulse'
                 }`}
+                aria-label={isOnline ? "Network: Connected" : "Network: Offline Mode"}
               >
                 {isOnline ? <Wifi className="w-5 h-5" /> : <WifiOff className="w-5 h-5" />}
               </button>
@@ -790,6 +835,7 @@ export default function App() {
                   setShowWifiPopover(false);
                 }}
                 className="ml-sm focus:outline-none rounded-full ring-2 ring-transparent focus:ring-primary transition-shadow cursor-pointer block"
+                aria-label="Toggle profile dropdown menu"
               >
                 <img 
                   alt="Administrator Profile" 

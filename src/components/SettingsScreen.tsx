@@ -48,34 +48,72 @@ export default function SettingsScreen({
   setBottlenecks,
   onReset
 }: SettingsScreenProps) {
-  // General State
-  const [fullName, setFullName] = useState('Alexander Thorne');
-  const [primaryEmail, setPrimaryEmail] = useState('a.thorne@stadiumpro.ops');
-  const [systemLanguage, setSystemLanguage] = useState('English (United States)');
+  // General State loaded from localStorage
+  const [fullName, setFullName] = useState(() => 
+    localStorage.getItem('setting_fullName') || 'Alexander Thorne'
+  );
+  const [primaryEmail, setPrimaryEmail] = useState(() => 
+    localStorage.getItem('setting_primaryEmail') || 'a.thorne@stadiumpro.ops'
+  );
+  const [systemLanguage, setSystemLanguage] = useState(() => 
+    localStorage.getItem('setting_systemLanguage') || 'English (United States)'
+  );
   const [isDarkMode, setIsDarkMode] = useState(() => document.documentElement.classList.contains('dark'));
   
-  // Notification thresholds
-  const [crowdDensityThreshold, setCrowdDensityThreshold] = useState(85);
-  const [revenueLeakageThreshold, setRevenueLeakageThreshold] = useState(500);
+  // Notification thresholds loaded from localStorage
+  const [crowdDensityThreshold, setCrowdDensityThreshold] = useState(() => {
+    const saved = localStorage.getItem('setting_crowdDensityThreshold');
+    return saved ? Number(saved) : 85;
+  });
+  const [revenueLeakageThreshold, setRevenueLeakageThreshold] = useState(() => {
+    const saved = localStorage.getItem('setting_revenueLeakageThreshold');
+    return saved ? Number(saved) : 500;
+  });
 
-  // Security and API Key
+  // Security, Credentials, and System IDs
   const [apiKeyVisible, setApiKeyVisible] = useState(false);
   const [idsVisible, setIdsVisible] = useState(false);
 
-  // Load API keys and System IDs through typed interface mapping
+  // Load editable values from localStorage or default env vars / safe placeholders
+  const [stadiumOpsApiKey, setStadiumOpsApiKey] = useState(() => 
+    localStorage.getItem('setting_stadiumOpsApiKey') || import.meta.env.VITE_STADIUM_OPS_API_KEY || ''
+  );
+  const [iotHubApiKey, setIotHubApiKey] = useState(() => 
+    localStorage.getItem('setting_iotHubApiKey') || ''
+  );
+  const [posTerminalApiKey, setPosTerminalApiKey] = useState(() => 
+    localStorage.getItem('setting_posTerminalApiKey') || ''
+  );
+  const [stadiumId, setStadiumId] = useState(() => 
+    localStorage.getItem('setting_stadiumId') || import.meta.env.VITE_STADIUM_ID || ''
+  );
+  const [iotHubId, setIotHubId] = useState(() => 
+    localStorage.getItem('setting_iotHubId') || import.meta.env.VITE_IOT_HUB_ID || ''
+  );
+  const [posTerminalId, setPosTerminalId] = useState(() => 
+    localStorage.getItem('setting_posTerminalId') || import.meta.env.VITE_POS_TERMINAL_ID || ''
+  );
+  const [cctvStreamId, setCctvStreamId] = useState(() => 
+    localStorage.getItem('setting_cctvStreamId') || import.meta.env.VITE_CCTV_STREAM_ID || ''
+  );
+  const [appUrl, setAppUrl] = useState(() => 
+    localStorage.getItem('setting_appUrl') || import.meta.env.VITE_APP_URL || window.location.origin
+  );
+
+  // Dynamic config derived from states
   const apiConfig: APIConfig = {
     geminiApiKey: import.meta.env.VITE_GEMINI_API_KEY || "• • • • • • • • • • • • • • • •",
-    stadiumOpsApiKey: import.meta.env.VITE_STADIUM_OPS_API_KEY || "sk_stadiumops_pro_live_8d7a12b6fd599812",
-    iotHubApiKey: "key_iot_mesh_w_3289ab72c91a01",
-    posTerminalApiKey: "key_pos_hub_vendor_8f11074da",
-    appUrl: import.meta.env.VITE_APP_URL || window.location.origin
+    stadiumOpsApiKey: stadiumOpsApiKey || "sk_stadiumops_pro_live_8d7a12b6fd599812",
+    iotHubApiKey: iotHubApiKey || "key_iot_mesh_w_3289ab72c91a01",
+    posTerminalApiKey: posTerminalApiKey || "key_pos_hub_vendor_8f11074da",
+    appUrl: appUrl || window.location.origin
   };
 
   const systemIDs: SystemIDs = {
-    stadiumId: import.meta.env.VITE_STADIUM_ID || "stadium_stg_coliseum_99b",
-    iotHubId: import.meta.env.VITE_IOT_HUB_ID || "hub_mesh_west_gate_c",
-    posTerminalId: import.meta.env.VITE_POS_TERMINAL_ID || "pos_alpha_vendor_42",
-    cctvStreamId: import.meta.env.VITE_CCTV_STREAM_ID || "stream_unified_concourse_112"
+    stadiumId: stadiumId || "stadium_stg_coliseum_99b",
+    iotHubId: iotHubId || "hub_mesh_west_gate_c",
+    posTerminalId: posTerminalId || "pos_alpha_vendor_42",
+    cctvStreamId: cctvStreamId || "stream_unified_concourse_112"
   };
 
   const apiKeyValue = apiConfig.stadiumOpsApiKey;
@@ -409,16 +447,74 @@ export default function SettingsScreen({
 
   // Reset Configuration to defaults
   const handleDiscardChanges = () => {
-    setFullName('Alexander Thorne');
-    setPrimaryEmail('a.thorne@stadiumpro.ops');
-    setSystemLanguage('English (United States)');
-    setCrowdDensityThreshold(85);
-    setRevenueLeakageThreshold(500);
-    alert('Configuration changes discarded.');
+    setFullName(localStorage.getItem('setting_fullName') || 'Alexander Thorne');
+    setPrimaryEmail(localStorage.getItem('setting_primaryEmail') || 'a.thorne@stadiumpro.ops');
+    setSystemLanguage(localStorage.getItem('setting_systemLanguage') || 'English (United States)');
+    
+    const savedDensity = localStorage.getItem('setting_crowdDensityThreshold');
+    setCrowdDensityThreshold(savedDensity ? Number(savedDensity) : 85);
+    const savedLeakage = localStorage.getItem('setting_revenueLeakageThreshold');
+    setRevenueLeakageThreshold(savedLeakage ? Number(savedLeakage) : 500);
+
+    setStadiumOpsApiKey(localStorage.getItem('setting_stadiumOpsApiKey') || '');
+    setIotHubApiKey(localStorage.getItem('setting_iotHubApiKey') || '');
+    setPosTerminalApiKey(localStorage.getItem('setting_posTerminalApiKey') || '');
+    
+    setStadiumId(localStorage.getItem('setting_stadiumId') || '');
+    setIotHubId(localStorage.getItem('setting_iotHubId') || '');
+    setPosTerminalId(localStorage.getItem('setting_posTerminalId') || '');
+    setCctvStreamId(localStorage.getItem('setting_cctvStreamId') || '');
+    setAppUrl(localStorage.getItem('setting_appUrl') || window.location.origin);
+
+    alert('Configuration changes discarded and reloaded from storage.');
   };
 
   const handleSaveConfiguration = () => {
-    alert('StadiumOps Pro configuration saved successfully!');
+    localStorage.setItem('setting_fullName', fullName);
+    localStorage.setItem('setting_primaryEmail', primaryEmail);
+    localStorage.setItem('setting_systemLanguage', systemLanguage);
+    localStorage.setItem('setting_crowdDensityThreshold', String(crowdDensityThreshold));
+    localStorage.setItem('setting_revenueLeakageThreshold', String(revenueLeakageThreshold));
+    
+    localStorage.setItem('setting_stadiumOpsApiKey', stadiumOpsApiKey);
+    localStorage.setItem('setting_iotHubApiKey', iotHubApiKey);
+    localStorage.setItem('setting_posTerminalApiKey', posTerminalApiKey);
+    
+    localStorage.setItem('setting_stadiumId', stadiumId);
+    localStorage.setItem('setting_iotHubId', iotHubId);
+    localStorage.setItem('setting_posTerminalId', posTerminalId);
+    localStorage.setItem('setting_cctvStreamId', cctvStreamId);
+    localStorage.setItem('setting_appUrl', appUrl);
+
+    alert('StadiumOps Pro configuration saved successfully and persisted!');
+  };
+
+  const handleResetToDefaults = () => {
+    if (window.confirm("Are you sure you want to reset all configurations to default values?")) {
+      const keysToClear = [
+        'setting_fullName', 'setting_primaryEmail', 'setting_systemLanguage',
+        'setting_crowdDensityThreshold', 'setting_revenueLeakageThreshold',
+        'setting_stadiumOpsApiKey', 'setting_iotHubApiKey', 'setting_posTerminalApiKey',
+        'setting_stadiumId', 'setting_iotHubId', 'setting_posTerminalId', 'setting_cctvStreamId', 'setting_appUrl'
+      ];
+      keysToClear.forEach(key => localStorage.removeItem(key));
+
+      setFullName('Alexander Thorne');
+      setPrimaryEmail('a.thorne@stadiumpro.ops');
+      setSystemLanguage('English (United States)');
+      setCrowdDensityThreshold(85);
+      setRevenueLeakageThreshold(500);
+      setStadiumOpsApiKey('');
+      setIotHubApiKey('');
+      setPosTerminalApiKey('');
+      setStadiumId('');
+      setIotHubId('');
+      setPosTerminalId('');
+      setCctvStreamId('');
+      setAppUrl(window.location.origin);
+
+      alert('All configurations have been reset to factory defaults.');
+    }
   };
 
   // Original Incident Triggers from original code
@@ -539,6 +635,13 @@ export default function SettingsScreen({
             </p>
           </div>
           <div className="flex items-center gap-sm">
+            <button 
+              id="btn-reset-defaults"
+              onClick={handleResetToDefaults}
+              className="bg-surface border border-rose-200 hover:bg-rose-50 dark:hover:bg-rose-950/20 px-md py-sm rounded-lg font-bold text-label-md text-rose-600 transition-colors cursor-pointer"
+            >
+              Reset to Defaults
+            </button>
             <button 
               id="btn-discard-changes"
               onClick={handleDiscardChanges}
@@ -957,40 +1060,69 @@ export default function SettingsScreen({
                 </div>
 
                 {/* API Key Access */}
-                <div className="space-y-xs pt-xs">
-                  <label className="text-label-sm font-black text-on-surface-variant uppercase tracking-tighter">Live API Access Key</label>
-                  <div className="flex items-center gap-sm">
-                    <div className="relative flex-grow">
-                      <input 
-                        id="input-api-key"
-                        type={apiKeyVisible ? "text" : "password"} 
-                        value={apiKeyValue}
-                        readOnly
-                        className="w-full bg-surface-container-low border border-outline-variant rounded-lg pl-md pr-10 py-sm text-body-md font-mono text-on-surface dark:bg-surface-container outline-none"
-                      />
+                <div className="space-y-md pt-xs">
+                  <div className="space-y-xs">
+                    <label className="text-label-sm font-black text-on-surface-variant uppercase tracking-tighter block">StadiumOps API Access Key (VITE_STADIUM_OPS_API_KEY)</label>
+                    <div className="flex items-center gap-sm">
+                      <div className="relative flex-grow">
+                        <input 
+                          id="input-api-key"
+                          type={apiKeyVisible ? "text" : "password"} 
+                          value={stadiumOpsApiKey}
+                          onChange={(e) => setStadiumOpsApiKey(e.target.value)}
+                          placeholder="sk_stadiumops_pro_live_8d7a12b6fd599812"
+                          className="w-full bg-surface-container-low border border-outline-variant rounded-lg pl-md pr-10 py-sm text-body-md font-mono text-on-surface dark:bg-surface-container outline-none focus:border-primary"
+                        />
+                        <button 
+                          id="btn-toggle-key-visibility"
+                          onClick={() => setApiKeyVisible(!apiKeyVisible)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface"
+                          aria-label={apiKeyVisible ? "Hide API key" : "Show API key"}
+                        >
+                          {apiKeyVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
                       <button 
-                        id="btn-toggle-key-visibility"
-                        onClick={() => setApiKeyVisible(!apiKeyVisible)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface"
+                        id="btn-copy-api-key"
+                        onClick={handleCopyKey}
+                        className="p-2 bg-surface-container-high hover:bg-surface-variant rounded-lg text-on-surface-variant hover:text-primary transition-colors cursor-pointer"
+                        title="Copy API Key"
+                        aria-label="Copy API Key"
                       >
-                        {apiKeyVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        <Copy className="w-5 h-5" />
                       </button>
                     </div>
-                    <button 
-                      id="btn-copy-api-key"
-                      onClick={handleCopyKey}
-                      className="p-2 bg-surface-container-high hover:bg-surface-variant rounded-lg text-on-surface-variant hover:text-primary transition-colors cursor-pointer"
-                      title="Copy API Key"
-                    >
-                      <Copy className="w-5 h-5" />
-                    </button>
+                  </div>
+
+                  <div className="space-y-xs">
+                    <label className="text-label-sm font-black text-on-surface-variant uppercase tracking-tighter block">IoT Hub Sensor Access Key (VITE_IOT_HUB_API_KEY)</label>
+                    <input 
+                      id="input-iot-api-key"
+                      type="password" 
+                      value={iotHubApiKey}
+                      onChange={(e) => setIotHubApiKey(e.target.value)}
+                      placeholder="key_iot_mesh_w_3289ab72c91a01"
+                      className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-md py-sm text-body-md font-mono text-on-surface dark:bg-surface-container outline-none focus:border-primary"
+                    />
+                  </div>
+
+                  <div className="space-y-xs">
+                    <label className="text-label-sm font-black text-on-surface-variant uppercase tracking-tighter block">POS Hub Terminal Access Key (VITE_POS_TERMINAL_API_KEY)</label>
+                    <input 
+                      id="input-pos-api-key"
+                      type="password" 
+                      value={posTerminalApiKey}
+                      onChange={(e) => setPosTerminalApiKey(e.target.value)}
+                      placeholder="key_pos_hub_vendor_8f11074da"
+                      className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-md py-sm text-body-md font-mono text-on-surface dark:bg-surface-container outline-none focus:border-primary"
+                    />
                   </div>
                 </div>
 
                 {/* Exposing System IDs and Typed Credentials */}
                 <div className="border-t border-outline-variant/20 pt-md mt-md space-y-md">
                   <div className="flex items-center justify-between">
-                    <p className="text-label-sm font-black text-on-surface-variant uppercase tracking-tighter">Typed Identifiers &amp; credentials</p>
+                    <p className="text-label-sm font-black text-on-surface-variant uppercase tracking-tighter">System Identifiers &amp; credentials</p>
                     <button
                       onClick={() => setIdsVisible(!idsVisible)}
                       className="text-xs text-primary hover:underline font-bold"
@@ -998,51 +1130,71 @@ export default function SettingsScreen({
                       {idsVisible ? "Hide System IDs" : "Expose System IDs"}
                     </button>
                   </div>
-                  
-                  {idsVisible && (
-                    <div className="space-y-sm p-sm bg-surface-container-low rounded-xl border border-outline-variant/30 text-xs dark:bg-slate-900/40">
-                      <div className="space-y-1">
-                        <span className="text-[10px] uppercase font-bold text-slate-400 block">Stadium Identifier (stadiumId)</span>
-                        <code className="block bg-white dark:bg-slate-800 p-1.5 rounded border border-slate-100 dark:border-slate-800 font-mono text-[11px] overflow-x-auto text-slate-700 dark:text-slate-300">
-                          {systemIDs.stadiumId}
-                        </code>
-                      </div>
-                      <div className="space-y-1">
-                        <span className="text-[10px] uppercase font-bold text-slate-400 block">IoT Hub Identifier (iotHubId)</span>
-                        <code className="block bg-white dark:bg-slate-800 p-1.5 rounded border border-slate-100 dark:border-slate-800 font-mono text-[11px] overflow-x-auto text-slate-700 dark:text-slate-300">
-                          {systemIDs.iotHubId}
-                        </code>
-                      </div>
-                      <div className="space-y-1">
-                        <span className="text-[10px] uppercase font-bold text-slate-400 block">POS Terminal Identifier (posTerminalId)</span>
-                        <code className="block bg-white dark:bg-slate-800 p-1.5 rounded border border-slate-100 dark:border-slate-800 font-mono text-[11px] overflow-x-auto text-slate-700 dark:text-slate-300">
-                          {systemIDs.posTerminalId}
-                        </code>
-                      </div>
-                      <div className="space-y-1">
-                        <span className="text-[10px] uppercase font-bold text-slate-400 block">CCTV Feed Stream ID (cctvStreamId)</span>
-                        <code className="block bg-white dark:bg-slate-800 p-1.5 rounded border border-slate-100 dark:border-slate-800 font-mono text-[11px] overflow-x-auto text-slate-700 dark:text-slate-300">
-                          {systemIDs.cctvStreamId}
-                        </code>
-                      </div>
-                      <div className="space-y-1">
-                        <span className="text-[10px] uppercase font-bold text-slate-400 block">Gemini API Connection State</span>
-                        <div className="flex items-center gap-1.5 bg-white dark:bg-slate-800 p-1.5 rounded border border-slate-100 dark:border-slate-800 text-slate-700 dark:text-slate-300">
-                          <span className={`w-2 h-2 rounded-full ${apiConfig.geminiApiKey.includes('•') ? 'bg-amber-400' : 'bg-emerald-500'}`}></span>
-                          <span className="font-mono text-[11px]">{apiConfig.geminiApiKey}</span>
-                        </div>
-                      </div>
-                      <div className="space-y-1">
-                        <span className="text-[10px] uppercase font-bold text-slate-400 block">Operational App URL (appUrl)</span>
-                        <code className="block bg-white dark:bg-slate-800 p-1.5 rounded border border-slate-100 dark:border-slate-800 font-mono text-[11px] overflow-x-auto text-slate-700 dark:text-slate-300">
-                          {apiConfig.appUrl}
-                        </code>
+                </div>
+                
+                {idsVisible && (
+                  <div className="space-y-sm p-md bg-surface-container-low rounded-xl border border-outline-variant/30 text-xs dark:bg-slate-900/40">
+                    <div className="space-y-1">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Stadium Identifier (stadiumId)</span>
+                      <input 
+                        type="text"
+                        value={stadiumId}
+                        onChange={(e) => setStadiumId(e.target.value)}
+                        placeholder="stadium_stg_coliseum_99b"
+                        className="w-full bg-white dark:bg-slate-800 p-2 rounded border border-slate-200 dark:border-slate-700 font-mono text-xs text-slate-700 dark:text-slate-300 outline-none focus:border-primary"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">IoT Hub Identifier (iotHubId)</span>
+                      <input 
+                        type="text"
+                        value={iotHubId}
+                        onChange={(e) => setIotHubId(e.target.value)}
+                        placeholder="hub_mesh_west_gate_c"
+                        className="w-full bg-white dark:bg-slate-800 p-2 rounded border border-slate-200 dark:border-slate-700 font-mono text-xs text-slate-700 dark:text-slate-300 outline-none focus:border-primary"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">POS Terminal Identifier (posTerminalId)</span>
+                      <input 
+                        type="text"
+                        value={posTerminalId}
+                        onChange={(e) => setPosTerminalId(e.target.value)}
+                        placeholder="pos_alpha_vendor_42"
+                        className="w-full bg-white dark:bg-slate-800 p-2 rounded border border-slate-200 dark:border-slate-700 font-mono text-xs text-slate-700 dark:text-slate-300 outline-none focus:border-primary"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">CCTV Feed Stream ID (cctvStreamId)</span>
+                      <input 
+                        type="text"
+                        value={cctvStreamId}
+                        onChange={(e) => setCctvStreamId(e.target.value)}
+                        placeholder="stream_unified_concourse_112"
+                        className="w-full bg-white dark:bg-slate-800 p-2 rounded border border-slate-200 dark:border-slate-700 font-mono text-xs text-slate-700 dark:text-slate-300 outline-none focus:border-primary"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Gemini API Connection State</span>
+                      <div className="flex items-center gap-1.5 bg-white dark:bg-slate-800 p-2 rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300">
+                        <span className={`w-2 h-2 rounded-full ${apiConfig.geminiApiKey.includes('•') ? 'bg-amber-400' : 'bg-emerald-500'}`}></span>
+                        <span className="font-mono text-xs">{apiConfig.geminiApiKey}</span>
                       </div>
                     </div>
-                  )}
+                    <div className="space-y-1">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Operational App URL (appUrl)</span>
+                      <input 
+                        type="text"
+                        value={appUrl}
+                        onChange={(e) => setAppUrl(e.target.value)}
+                        placeholder="https://example-stadium-ops.app"
+                        className="w-full bg-white dark:bg-slate-800 p-2 rounded border border-slate-200 dark:border-slate-700 font-mono text-xs text-slate-700 dark:text-slate-300 outline-none focus:border-primary"
+                      />
+                    </div>
+                  </div>
+                )}
                 </div>
-              </div>
-            </section>
+              </section>
 
             {/* Failure Injector Section (Retaining full interactive capabilities) */}
             <section id="card-failure-injector" className="bg-surface-container-lowest rounded-xl p-md shadow-[0px_4px_20px_rgba(0,0,0,0.05)] border border-outline-variant/30 hover:shadow-[0px_10px_30px_rgba(0,0,0,0.08)] transition-all duration-300">

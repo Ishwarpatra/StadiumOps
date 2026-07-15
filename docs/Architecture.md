@@ -2,38 +2,49 @@
 
 ## 1. Overview
 
-This document describes the high-level architecture for the Smart Stadium Digital Assistant. The solution is built as a modular, scalable, and secure system, leveraging Google Cloud Platform (GCP) technologies, cloud-native principles, and microservices. The architecture is designed to support real-time data processing for dynamic pricing, smart building IoT telemetry, and interactive fan engagement.
+This document describes the high-level architecture for **StadiumOps Pro - Smart Stadium Operations & Revenue Monitor Hub**. The solution is engineered as a highly responsive, client-first React application (Vite + React 19 + Tailwind CSS) designed for serverless container deployment on **Google Cloud Run**.
 
-## 2. High-Level System Architecture
+To ensure seamless, standalone operation and high accessibility within the AI Studio preview environment, all core stadium operations pipelines (IoT meshes, ticketing gates, computer vision, concessions POS, and staffing dispatches) are orchestrated using a robust **Local Reactive Simulation Engine**. This engine simulates real-time data ingestion and processing with high fidelity, while a dedicated **GCP Web Services Architecture Panel** provides active visual diagnostics, ping tests, and terminal outputs representing actual Google Cloud integrations.
 
-The system consists of several interconnected components deployed on GCP:
+---
 
-*   **GCP IoT Core / Pub/Sub Data Ingestion Layer:** Responsible for collecting data from stadium IoT sensors, ticketing gates, concession POS registers, and computer vision feeds.
-*   **Data Processing & Analytics Layer (Cloud Run / BigQuery):** Runs serverless container endpoints on **Google Cloud Run** to execute predictive crowd analytics, dynamic ticket pricing, and computer-vision processing. Historical logs are synchronized with **Google BigQuery** for analytics.
-*   **Security & Configuration Layer (Google Secret Manager):** Sensitive operational API keys (e.g., `VITE_STADIUM_OPS_API_KEY`, `VITE_GEMINI_API_KEY`) and system identifiers are securely stored in **Google Secret Manager**, avoiding source code leakage.
-*   **Frontend Applications Layer:** Visually polished, responsive React web-based dashboards for stadium operators and event planners.
+## 2. System Architecture & Component Mapping
+
+The application maps critical stadium operations to a modern web client and simulated cloud services:
 
 ```mermaid
 graph TD
-    A[IoT Sensors, POS, Ticketing, Biometrics] --> B(GCP Pub/Sub Ingestion)
-    B --> C{Cloud Run Processing & Analytics}
-    C --> D[Gemini AI Models]
-    C --> E[Google Secret Manager]
-    C --> F[BigQuery Analytical Storage]
-    C --> G[Operator Web Dashboard]
+    A[IoT Mesh, CCTV, POS, Turnstiles] --> B[Local Simulation Engine]
+    B --> C[React State Layer / Hooks]
+    C --> D[Google AI Studio / Gemini API]
+    C --> E[GCP Web Services Console]
+    E --> F[Simulated GCP Endpoints: GKE, Cloud Run, Pub/Sub, BigQuery, Secret Manager]
 ```
 
-## 3. Technical Stack (GCP-Enhanced)
+### 2.1. Local Simulation Engine (Frontend Core)
+- **High-Frequency Ingestion Simulators:** Simulates ticket scans across 4 gates, cash register tallies across 24 concessions, and live camera feed frames.
+- **State Synchronizers:** Updates local state and maps dynamic crowd congestion bottlenecks, revenue leakage warnings, and event staffing dispatches reactively.
 
-The following technologies are integrated to build the Smart Stadium Digital Assistant:
+### 2.2. GCP Web Services Integration Panel
+A fully interactive diagnostics suite representing a production Google Cloud topology. Stadium operators can ping and run self-test health queries on 15 core services:
+- **Compute:** GKE, Cloud Run, Cloud Functions.
+- **AI & ML:** Vertex AI, Cloud Vision API, MediaPipe.
+- **Data & IoT:** BigQuery, Pub/Sub, Cloud Dataflow.
+- **Databases & Storage:** Cloud SQL, Cloud Firestore, GCS.
+- **Engagement:** Google Maps Platform, Firebase Cloud Messaging, Firebase Auth.
+- **Analytics:** Looker Analytics.
 
-### 3.1. Ingestion & Storage
-*   **GCP Pub/Sub:** Real-time event broker handling massive streams of turnstile ticket scans and concession POS orders.
-*   **Google BigQuery:** Enterprise data warehouse storing unified history for security, staffing, and revenue auditing.
-*   **Google Secret Manager:** Secure secret vault for system API keys and credentials.
+### 2.3. Serverless Gemini AI Integration
+Provides real-time natural language summaries, automated steward staffing dispatches, and crowd bottleneck optimization advisories using Vertex AI/Gemini endpoints.
 
-### 3.2. Hosting & Hosting
-*   **Google Cloud Run:** Serverless container platform hosting the application backend, ensuring automated scaling, low cold starts, and cost-efficiency.
+---
 
-### 3.3. AI/ML
-*   **Gemini Pro Model (Google AI Studio / Vertex AI):** Powers live operational insights, automated staff allocation suggestions, and natural language analytics.
+## 3. Deployment & Security Guidelines
+
+### 3.1. Standalone Deployment
+The app is fully compatible with production builds (`npm run build`) and starts instantly in any standard Node.js server container (such as Google Cloud Run).
+
+### 3.2. Secure Configuration Management
+To prevent client-side credential leaks:
+- Sensitive variables (such as operational API keys) are configured through a safe environment interface.
+- For production GCP environments, variables are stored in **Google Secret Manager** and injected into the execution container securely at runtime, avoiding `VITE_` prefix leaks in public codebases.
