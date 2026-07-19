@@ -6,16 +6,12 @@ import {
   MapPin, 
   Settings, 
   Activity, 
-  Clock, 
   Menu, 
   X, 
   ShieldCheck, 
   Sparkles,
   Wifi,
   WifiOff,
-  Radio,
-  Tv,
-  Eye,
   LogOut,
   BellRing,
   HelpCircle,
@@ -473,8 +469,11 @@ export default function App() {
             <button 
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="md:hidden text-on-surface cursor-pointer p-1"
+              aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+              aria-expanded={mobileMenuOpen}
+              aria-controls="mobile-nav-drawer"
             >
-              <Menu className="w-6 h-6" />
+              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
             <span className="text-headline-md font-headline-md font-bold text-primary">StadiumOps Pro</span>
           </div>
@@ -1039,7 +1038,7 @@ export default function App() {
 
         {/* Mobile Navigation Menu Drawer */}
         {mobileMenuOpen && (
-          <div className="md:hidden bg-surface border-b border-outline-variant p-4 space-y-2 select-none z-40 shadow-md">
+          <div id="mobile-nav-drawer" className="md:hidden bg-surface border-b border-outline-variant p-4 space-y-2 select-none z-40 shadow-md">
             <button 
               onClick={() => handleNavigate('dashboard')}
               className={`w-full flex items-center space-x-sm px-sm py-2 rounded-lg font-bold text-left cursor-pointer ${

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { 
   Users, 
   Smile, 
@@ -40,7 +40,14 @@ export default function DashboardScreen({
   setHotspots,
   onNavigate
 }: DashboardScreenProps) {
-  const [showToast, setShowToast] = useState<string | null>(null);
+  // Use global toast system provided by App.tsx via window.showToast
+  const triggerToast = (msg: string, type: 'success' | 'error' | 'warning' | 'info' = 'success') => {
+    if (typeof window !== 'undefined' && (window as any).showToast) {
+      (window as any).showToast(msg, type, 'AI Action');
+    } else {
+      console.log(`[Toast] ${msg}`);
+    }
+  };
 
   const handleExecuteAIAction = (actionId: string) => {
     // Execute AI Action
@@ -100,12 +107,6 @@ export default function DashboardScreen({
     setAiActions(prev => prev.filter(act => act.id !== actionId));
   };
 
-  const triggerToast = (msg: string) => {
-    setShowToast(msg);
-    setTimeout(() => {
-      setShowToast(null);
-    }, 4000);
-  };
 
   // Convert queue time from seconds to min/s format
   const formatQueueTime = (seconds: number) => {
@@ -118,18 +119,7 @@ export default function DashboardScreen({
 
   return (
     <div className="space-y-6">
-      {/* Toast Notification */}
-      {showToast && (
-        <div className="fixed top-4 right-4 z-50 bg-slate-900 border border-blue-500/30 text-white rounded-xl shadow-xl px-4 py-3 flex items-center gap-3 animate-bounce">
-          <Sparkles className="w-5 h-5 text-amber-500 animate-pulse" />
-          <p className="text-xs font-semibold">{showToast}</p>
-          <button onClick={() => setShowToast(null)} className="text-slate-400 hover:text-white ml-2">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
 
-      {/* Hero Section: Real-time Status */}
       <section className="bg-white rounded-2xl p-6 shadow-md border border-slate-100">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 pb-4 border-b border-slate-100">
           <div>
