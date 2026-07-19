@@ -6,9 +6,9 @@ import crypto from "crypto";
 // In-Memory Database to mimic persistent GCP database inside sandbox
 const db = {
   config: {
-    stadiumOpsApiKey: process.env.STADIUM_OPS_API_KEY || "sk_stadiumops_pro_live_8d7a12b6fd599812",
-    iotHubApiKey: process.env.IOT_HUB_API_KEY || "key_iot_mesh_w_3289ab72c91a01",
-    posTerminalApiKey: process.env.POS_TERMINAL_API_KEY || "key_pos_hub_vendor_8f11074da",
+    stadiumOpsApiKey: process.env.STADIUM_OPS_API_KEY || "sk_stadiumops_placeholder_key_xxxx",
+    iotHubApiKey: process.env.IOT_HUB_API_KEY || "key_iot_mesh_placeholder_xxxx",
+    posTerminalApiKey: process.env.POS_TERMINAL_API_KEY || "key_pos_hub_vendor_placeholder_xxxx",
     stadiumId: process.env.STADIUM_ID || "stadium_stg_coliseum_99b",
     iotHubId: process.env.IOT_HUB_ID || "hub_mesh_west_gate_c",
     posTerminalId: process.env.POS_TERMINAL_ID || "pos_alpha_vendor_42",

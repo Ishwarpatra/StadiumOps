@@ -1,265 +1,119 @@
-# StadiumOps Pro — AI-Powered Smart Stadium Operations
+# StadiumOps Pro - Smart Stadium Operations & Revenue Monitor Hub
 
-A real-time intelligent stadium operations platform powered by **Google Gemini AI**, enabling dynamic crowd management, revenue optimization, and predictive incident response for large-scale venues.
-
----
-
-## 🎯 Chosen Vertical: Smart Stadium Operations & Revenue Optimization
-
-StadiumOps Pro addresses critical operational inefficiencies in large sports and entertainment venues:
-
-**Key Pain Points Addressed:**
-- **Concession Queue Chaos:** Real-time queue monitoring prevents revenue loss from long wait times and abandonment
-- **Unpredictable Crowd Bottlenecks:** AI-driven hotspot detection predicts congestion before it impacts operations
-- **Manual Staffing Allocation:** Dynamic staff deployment based on demand forecasting and live incidents
-- **Lost Revenue Visibility:** Comprehensive dashboard tracks concessions, ticketing, and merchandise revenue in real-time
-- **Reactive Incident Response:** Shift from reactive to predictive operations with AI-driven recommendations
+StadiumOps Pro is an incredibly polished, real-time smart stadium operations, crowd bottleneck monitor, and revenue audit dashboard. Built using **React 19**, **Vite**, and **Tailwind CSS**, this hub integrates active crowd telemetry simulations, adaptive staffing engines, dynamic incident injectors, and a full-featured **GCP Web Services Integration & Diagnostics Suite** representing a production Google Cloud Platform architecture.
 
 ---
 
-## 🤖 Approach & AI Integration Logic
+## 🚀 Chosen Vertical: Smart Stadium Operations & Revenue Monitor
 
-### How Gemini AI Powers the System
-
-1. **Predictive Crowd Analytics**
-   - Analyzes historical queue patterns and real-time sensor data
-   - Predicts bottleneck formation 10-15 minutes in advance
-   - Recommends preemptive staff redeployment before congestion peaks
-
-2. **Dynamic Pricing & Revenue Optimization**
-   - Gemini evaluates concession demand, queue length, and historical sales velocity
-   - Recommends optimal pricing adjustments for surge periods (e.g., halftime, post-game)
-   - Estimates revenue impact of staffing and pricing decisions
-
-3. **Intelligent Incident Routing**
-   - Classifies incoming incidents (medical, security, maintenance) by severity and location
-   - Routes to nearest available staff and predicts resolution time
-   - Suggests concurrent preventive actions (e.g., reroute foot traffic if one gate goes down)
-
-4. **Operational Diagnostics**
-   - Monitors system health: API latency, database consistency, real-time sync
-   - Identifies anomalies (e.g., POS terminals offline, sensor data stale)
-   - Suggests remediation steps based on venue infrastructure
-
-### Data Inputs to Gemini
-- Real-time simulation state: attendance, revenue, active staff, queue times
-- Historical hotspot and bottleneck patterns
-- Incident logs and resolution times
-- Venue-specific configuration (capacity, staffing models, thresholds)
-
-### Outputs & Actions
-- AI-driven recommendations displayed in **AI Actions Panel** on Dashboard
-- Automated alerts when thresholds are breached
-- Suggested staff deployment routes and priorities
-- Predictive metrics (estimated queue clear times, revenue forecasts)
+StadiumOps Pro is designed to directly target the friction points that cause operational capital leakage, concession queue fatigue, and staffing ineffectiveness in sports coliseums and entertainment venues:
+1. **Concession Congestion Monitor:** Scans 24 concessions for sales, transaction volume, and waiting times.
+2. **Turnstile Throughput & Bottleneck Tracker:** Models high-frequency gate entries and average line wait times.
+3. **Adaptive Staffing Dispatch Engine:** Allows operators to dynamically dispatch stewards and security patrols directly to relieve bottlenecked gates.
+4. **Live Scenario Injector:** Simulates gate ticketing failures, concourse spillages, and POS offline events to track response times.
+5. **Interactive GCP Diagnostics Panel:** Simulates 15 core Google Cloud Platform endpoints with active CLI reference, handshakes, ping testing, and console log outputs.
 
 ---
 
-## 🏗️ How It Works
+## 🛠️ GCP Web Services Architecture Integration
 
-### Architecture Overview
+The hub contains an interactive **GCP Web Services** controller showcasing a standard production cloud stack:
+
+*   **Core Compute:** Google Kubernetes Engine (GKE), Google Cloud Run, Cloud Functions.
+*   **AI & Machine Learning:** Vertex AI Models, Cloud Vision API (Checkout OCR), MediaPipe Biometrics.
+*   **Data Analytics & IoT:** Google BigQuery, Cloud Pub/Sub Telemetry, Cloud Dataflow.
+*   **Storage & Databases:** Cloud SQL (PostgreSQL), Cloud Firestore NoSQL, Google Cloud Storage (GCS).
+*   **Frontend & Engagement:** Google Maps Platform (3D Tiles), Firebase Cloud Messaging, Firebase Auth.
+*   **Operational Efficiency:** Looker Analytics dashboards.
+
+Operators can select any service, inspect its active category, review its standard Google Cloud CLI command, view latency metrics, and click **"Run Diagnostics Self-Test"** to execute simulated live connections with direct terminal outputs.
+
+---
+
+## 🔒 Security & Credentials Architecture
+
+In compliance with enterprise security best practices:
+- **Credential Masking:** System credentials and active API keys are loaded through typed environments and securely masked in the UI.
+- **Sensitive UUID Toggles:** Critical stadium identifiers (`stadiumId`, `iotHubId`, `posTerminalId`, `cctvStreamId`) and Gemini API key states can be fully hidden or exposed dynamically by administrators.
+- **Google Secret Manager Warning:** In production cloud environments, all secrets must be stored securely using GCP Secret Manager and injected into serverless containers rather than bundled in public frontend builds.
+
+---
+
+## 📂 Project Structure
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│           React Frontend (Vite + Tailwind)              │
-│  ┌──────────┬────────────┬────────────┬──────────────┐  │
-│  │Dashboard │ Revenue    │ Staffing   │ Settings     │  │
-│  │          │ Concession │ Map        │              │  │
-│  └──────────┴────────────┴────────────┴──────────────┘  │
-│                                                          │
-│  Local State: Simulation, Hotspots, Bottlenecks        │
-│  Persistence: localStorage + Backend Sync               │
-└─────────────────────────────────────────────────────────┘
-         │                          │
-         │ (5s polling)            │ (WebSocket / REST)
-         ▼                          ▼
-┌──────────────────────────────────────────────────┐
-│      Backend API (Express.js on Node.js)         │
-│  ├─ /api/simulation – Simulation state           │
-│  ├─ /api/incidents – Real-time incidents        │
-│  ├─ /api/config – Venue configuration            │
-│  └─ /api/audit-logs – Operational audit trail   │
-└──────────────────────────────────────────────────┘
-         │
-         ├─ Google Gemini AI API
-         │  └─ Generate predictive recommendations
-         │     & diagnostic insights
-         │
-         ├─ Cloud Databases (Simulation)
-         │  └─ Persist state, audit logs
-         │
-         └─ IoT Simulated Data
-            └─ Queue sensors, POS terminals,
-               turnstiles (mocked in development)
+/
+├── /docs                 # Project Planning & Specifications
+│   ├── PRD.md            # Product Requirements Document
+│   ├── Architecture.md   # Cloud Topology and Component Mapping
+│   ├── Rules.md          # Visual Craftsmanship & Development Rules
+│   ├── Phases.md         # Development Milestone Phases
+│   ├── Design.md         # Visual Aesthetics & Typography Guidelines
+│   └── Memory.md         # Active Project Status Record
+├── /src                  # React Codebase
+│   ├── /components       # Modular Dashboard Screens
+│   │   ├── DashboardScreen.tsx
+│   │   ├── SettingsScreen.tsx
+│   │   └── ...
+│   ├── App.tsx           # Application Core
+│   ├── types.ts          # Safe TypeScript Type Definitions
+│   └── index.css         # Tailwind Ingest Rules
+├── index.html            # App Entry HTML Page
+├── package.json          # Dependency Manifest
+└── vite.config.ts        # Vite Bundler Setup
 ```
 
-### Key Screens
-
-1. **Dashboard:** Live KPIs, AI recommendation engine, active incidents
-2. **Revenue Concessions:** Real-time revenue breakdown, queue analytics, pricing recommendations
-3. **Staffing Map:** Interactive stadium hotspot map with staff deployment UI
-4. **Venue Management:** Fan sentiment, incident logs, real-time operational metrics
-5. **Settings:** Credential management, threshold configuration, system diagnostics
-6. **Help Center:** AI-powered diagnostics advisor and system health checks
-
-### State Management & Persistence
-
-- **Local State:** React hooks manage simulation, hotspots, bottlenecks, AI actions
-- **localStorage:** Automatic fallback persistence for offline scenarios
-- **Backend Sync:** 5-second polling syncs simulation state with server, handles offline conflicts
-- **Toast Notifications:** Real-time user feedback for actions and alerts
-
 ---
 
-## 📋 Key Assumptions & Design Decisions
+## ⚡ Quick Start & Development Setup
 
-1. **Simulation Over Real IoT:** 
-   - All sensor data is mocked (queue times, revenue, staff assignments) for demo purposes
-   - Production deployment would integrate real sensors (turnstiles, POS, occupancy)
-   - Data structure mirrors real IoT schema for easy swap-in
-
-2. **Client-Side Gemini Integration:**
-   - Gemini API key is client-side (VITE_GEMINI_API_KEY) for demo simplicity
-   - Production: Move to server-side backend with strict API key isolation
-   - All AI insights generated on-demand to minimize API costs
-
-3. **Frontend-Centric MVP:**
-   - Rapid prototyping without full backend/database infrastructure
-   - Demonstrates UX, AI recommendation logic, and real-time dashboard patterns
-   - Backend skeleton provided in `server.ts` for future scaling
-
-4. **Venue-Agnostic:**
-   - Configuration stored in `data.ts` allows multi-venue support with simple extensions
-   - Hardcoded stadium ID (`stadium_stg_coliseum_99b`) can be replaced with dynamic venue selector
-   - Hotspot coordinates auto-generated via deterministic hash for flexibility
-
-5. **Graceful Degradation:**
-   - Offline mode buffers actions in localStorage and syncs when online
-   - API failures fall back to client-side simulation state
-   - Notifications persist in localStorage for audit compliance
-
----
-
-## 🚀 Getting Started
+### Full-Stack Server Architecture
+StadiumOps Pro is implemented as a full-stack Node.js application. 
+- **Backend:** A robust **Express** server (`server.ts`) runs on port `3000` to serve secure API configurations and act as a gateway/proxy.
+- **Frontend:** Integrated directly with **Vite** as middleware in development for instant module replacement, and serving static assets from `/dist` in production.
+- **Secure Credentials:** All sensitive API keys are stored on the server-side via Node environment variables to prevent public client-side bundle exposure.
 
 ### Prerequisites
-- Node.js v18+
-- npm or yarn
+- Node.js (v18+)
+- npm
 
-### Installation & Development
+### Environment Variables
+Configure the following in your `.env` or system environment:
+```env
+# Gemini AI Platform API Keys (kept server-side for maximum security)
+GEMINI_API_KEY="your_server_side_gemini_key"
 
-```bash
-# 1. Install dependencies
-npm install
-
-# 2. Configure environment variables
-# Create a .env file or set system environment:
-export VITE_GEMINI_API_KEY="your-gemini-api-key"
-export STADIUM_ID="stadium_stg_coliseum_99b"
-export IOT_HUB_ID="hub_mesh_west_gate_c"
-export POS_TERMINAL_ID="pos_alpha_vendor_42"
-
-# 3. Run development server
-npm run dev
-
-# 4. Open browser to http://localhost:5173
+# Smart Stadium Credentials & Identifiers
+STADIUM_ID="stadium_stg_coliseum_99b"
+IOT_HUB_ID="hub_mesh_west_gate_c"
+POS_TERMINAL_ID="pos_alpha_vendor_42"
+CCTV_STREAM_ID="stream_unified_concourse_112"
+APP_URL="https://ais-dev-27qe423lhobpe6k3s5y2mt-743089973269.asia-east1.run.app"
 ```
 
-### Build for Production
+### Installation
+1. Install base dependencies:
+   ```bash
+   npm install
+   ```
 
-```bash
-# Type-check and build
-npm run lint
-npm run build
+2. Spin up the full-stack server (runs Express on port 3000 and mounts Vite):
+   ```bash
+   npm run dev
+   ```
 
-# Start production server
-npm run start
-```
+3. Open your browser and navigate to `http://localhost:3000` to interact with the dashboard.
 
-### Testing
-
-```bash
-# Run unit tests (Jest + React Testing Library)
-npm run test
-
-# Run tests in watch mode
-npm run test:watch
-```
-
----
-
-## 🔐 Security & Credentials
-
-- **Gemini API Key:** Stored in environment variables, never hardcoded in source
-- **Sensitive IDs:** Displayed with optional masking in Settings UI
-- **Audit Trail:** All significant operations logged to `/api/audit-logs`
-- **Production Recommendation:** Use GCP Secret Manager for credential injection
-
----
-
-## 📊 Key Features
-
-✅ **Real-Time Dashboard:** Live attendance, revenue, staff allocation, fan sentiment  
-✅ **AI-Powered Recommendations:** Gemini-driven insights for staffing, pricing, and incident response  
-✅ **Predictive Analytics:** Queue forecasting, revenue projections, bottleneck detection  
-✅ **Interactive Staffing Map:** Drag-and-drop staff deployment to hotspots  
-✅ **Comprehensive Revenue Tracking:** Concessions, ticketing, merchandise, with pricing levers  
-✅ **Offline Mode:** Full functionality with automatic sync when connectivity returns  
-✅ **Responsive Design:** Mobile-first UI, optimized for 2–27" displays  
-✅ **Accessibility:** ARIA labels, keyboard navigation, WCAG 2.1 compliance (ongoing)
-
----
-
-## 📁 Project Structure
-
-```
-StadiumOps/
-├── /docs                      # Product specifications
-│   ├── PRD.md                 # Product requirements & feature roadmap
-│   ├── Architecture.md        # System design & component mapping
-│   ├── Design.md              # Visual guidelines & accessibility
-│   ├── Rules.md               # Development standards
-│   └── Phases.md              # Development milestone phases
-├── /src                       # React application
-│   ├── /components            # Screen modules (Dashboard, Revenue, etc.)
-│   │   ├── DashboardScreen.tsx
-│   │   ├── RevenueScreen.tsx
-│   │   ├── StaffingScreen.tsx
-│   │   └── ...
-│   ├── /utils                 # Shared utilities (UUID, formatting)
-│   ├── App.tsx                # Main application shell
-│   ├── types.ts               # TypeScript type definitions
-│   ├── data.ts                # Mock data & initial state
-│   └── index.css              # Tailwind & global styles
-├── server.ts                  # Express backend (optional, for production)
-├── package.json               # Dependencies & scripts
-├── vite.config.ts             # Vite bundler configuration
-├── tsconfig.json              # TypeScript configuration
-└── index.html                 # HTML entry point
-```
-
----
-
-## 🤝 Contributing
-
-1. Follow the **Rules.md** development standards (clean, modular code; commented complex logic)
-2. Add unit tests for new features
-3. Ensure `npm run lint` and `npm run type-check` pass
-4. Submit PRs with clear descriptions of changes and design rationale
-
----
-
-## 📝 License
-
-This project is part of the Google AI Studio Challenge. All code and documentation are provided as-is for evaluation purposes.
-
----
-
-## 🙋 Support & Feedback
-
-For questions, issues, or feedback on functionality, refer to the **Help Center** screen within the app or open a GitHub issue.
-
----
-
-**Last Updated:** July 2026  
-**Built with:** React 19, Vite, Tailwind CSS, Google Gemini AI
+### Validation Commands
+- Run typescript type checkers to confirm full compilability:
+   ```bash
+   npm run lint
+   ```
+- Build production assets (compiles client bundle and packages server file to `/dist/server.cjs` via `esbuild`):
+   ```bash
+   npm run build
+   ```
+- Start production full-stack bundle:
+   ```bash
+   npm run start
+   ```

@@ -142,9 +142,9 @@ export default function SettingsScreen({
   // Dynamic config derived from states
   const apiConfig: APIConfig = {
     geminiApiKey: import.meta.env.VITE_GEMINI_API_KEY || "• • • • • • • • • • • • • • • •",
-    stadiumOpsApiKey: stadiumOpsApiKey || "sk_stadiumops_pro_live_8d7a12b6fd599812",
-    iotHubApiKey: iotHubApiKey || "key_iot_mesh_w_3289ab72c91a01",
-    posTerminalApiKey: posTerminalApiKey || "key_pos_hub_vendor_8f11074da",
+    stadiumOpsApiKey: stadiumOpsApiKey || "sk_stadiumops_placeholder_key_xxxx",
+    iotHubApiKey: iotHubApiKey || "key_iot_mesh_placeholder_xxxx",
+    posTerminalApiKey: posTerminalApiKey || "key_pos_hub_placeholder_xxxx",
     appUrl: appUrl || window.location.origin
   };
 
@@ -1357,7 +1357,7 @@ export default function SettingsScreen({
                             setStadiumOpsApiKey(e.target.value);
                             setValidationStatus('idle');
                           }}
-                          placeholder="sk_stadiumops_pro_live_8d7a12b6fd599812"
+                          placeholder="sk_stadiumops_xxxxxxxxxxxxxxxx"
                           className="w-full bg-surface-container-low border border-outline-variant rounded-lg pl-md pr-10 py-sm text-body-md font-mono text-on-surface dark:bg-surface-container outline-none focus:border-primary"
                         />
                         <button 
@@ -1405,7 +1405,7 @@ export default function SettingsScreen({
                       type="password" 
                       value={iotHubApiKey}
                       onChange={(e) => setIotHubApiKey(e.target.value)}
-                      placeholder="key_iot_mesh_w_3289ab72c91a01"
+                      placeholder="key_iot_mesh_xxxxxxxxxxxxxxxx"
                       className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-md py-sm text-body-md font-mono text-on-surface dark:bg-surface-container outline-none focus:border-primary"
                     />
                   </div>
@@ -1417,7 +1417,7 @@ export default function SettingsScreen({
                       type="password" 
                       value={posTerminalApiKey}
                       onChange={(e) => setPosTerminalApiKey(e.target.value)}
-                      placeholder="key_pos_hub_vendor_8f11074da"
+                      placeholder="key_pos_hub_xxxxxxxxxxxxxxxx"
                       className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-md py-sm text-body-md font-mono text-on-surface dark:bg-surface-container outline-none focus:border-primary"
                     />
                   </div>
